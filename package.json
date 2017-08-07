@@ -1,0 +1,15 @@
+{
+  "name": "blockchain-predictions",
+  "version": "1.0.0",
+  "description": "A deep learning network that acceps processed blockchain data to predict the price of a given cryptocurrency",
+  "main": "index.js",
+  "dependencies": {
+    "web3": "^1.0.0-beta.15"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
