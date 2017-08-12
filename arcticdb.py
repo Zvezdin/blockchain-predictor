@@ -10,98 +10,187 @@ import time
 import pickle
 import json
 
-tickSymbol = 'test2'
+import sys
+import os
+from Naked.toolshed.shell import execute_js, muterun_js
+
+tickKey = 'test2'
+txKey = 'tx'
+blKey =  'block'
+blockChunkSize = 'W'
+txChunkSize = 'D'
+courseChunkSize = 'M'
 
 store = Arctic('localhost')
 
-chunkStore = store['chunkstore']
-#store.initialize_library('name', lib_type=TICK_STORE)
+chunkStore = 0
+try:
+	chunkStore = store['chunkstore']
+except:
+	store.initialize_library('chunkstore', lib_type=CHUNK_STORE)
+	chunkStore = store['chunkstore']
 
-def loadRawData():
+def loadRawData(filepath):
 
-    start = time.time()
-    with open('data/poloniex_price_data.json') as json_data:
-        print(json_data)
-        loadedData = json.load(json_data)
-        print("Loading the data took "+str(time.time() - start)+" seconds")
-        return loadedData
+	start = time.time()
 
-    return [
-        {"date":1439014500,"high":333,"low":1.61,"open":1.65,"close":1.75,"volume":75.15,"quoteVolume":45,"weightedAverage":1.67},
-        {"date":1439014800,"high":1.85,"low":1.85,"open":1.85,"close":1.85,"volume":14.5786546,"quoteVolume":7.88035384,"weightedAverage":1.85},
-        {"date":1439015100,"high":1.85,"low":1.85,"open":1.85,"close":1.85,"volume":0.296,"quoteVolume":0.16,"weightedAverage":1.85},
-        {"date":1439015400,"high":1.85,"low":1.85,"open":1.85,"close":1.85,"volume":0.16611858,"quoteVolume":0.08979383,"weightedAverage":1.85},
-        {"date":1439015700,"high":1.85,"low":1.85,"open":1.85,"close":1.85,"volume":0,"quoteVolume":0,"weightedAverage":1.85},
-        {"date":1439016000,"high":1.85,"low":1.85,"open":1.85,"close":1.85,"volume":0,"quoteVolume":0,"weightedAverage":1.85},
-        {"date":1439016300,"high":420,"low":1.85,"open":1.85,"close":1.85,"volume":0,"quoteVolume":0,"weightedAverage":1.85},
-        {"date":1439016600,"high":1.71,"low":1.71,"open":1.71,"close":1.71,"volume":20.52,"quoteVolume":12,"weightedAverage":1.71},
-        {"date":1439016900,"high":1.71,"low":1.71,"open":1.71,"close":1.71,"volume":0,"quoteVolume":0,"weightedAverage":1.71},
-        {"date":1439017200,"high":1.71,"low":1.71,"open":1.71,"close":1.71,"volume":0,"quoteVolume":0,"weightedAverage":1.71},
-        {"date":1439017500,"high":1.71,"low":1.71,"open":1.71,"close":1.71,"volume":0,"quoteVolume":0,"weightedAverage":1.71},
-        {"date":1439017800,"high":1.75,"low":1.75,"open":1.75,"close":1.75,"volume":0.32584727,"quoteVolume":0.18619844,"weightedAverage":1.75}
-    ]
-
+	try:
+		with open(filepath) as json_data:
+			loadedData = json.load(json_data)
+			print("Loading the data took "+str(time.time() - start)+" seconds")
+			return loadedData
+	except:
+		return None
 def processRawData(data):
 
-    start = time.time()
-    for x in data:
-        x['date'] = dt.fromtimestamp(x['date'])
-        #x['transactions'] = str(pickle.dumps( [ {'from': 0x1, 'to': 0x2, 'value': 3} for x in range(3) ] ) )
-    print("Processing the data took "+str(time.time() - start)+" seconds")
+	start = time.time()
+	for x in data:
+		x['date'] = dt.fromtimestamp(x['date'])
+		#x['transactions'] = str(pickle.dumps( [ {'from': 0x1, 'to': 0x2, 'value': 3} for x in range(3) ] ) )
+	print("Processing the data took "+str(time.time() - start)+" seconds")
 
 def getDataFrame(data):
-    return pd.DataFrame(data)
+	return pd.DataFrame(data)
 
-def saveData(data):
-    start = time.time()
+def saveData(key, data, chunkSize = courseChunkSize):
+	start = time.time()
 
-    if chunkStore.has_symbol(tickSymbol):
-        trimIndex = 0
-        records = chunkStore.read(tickSymbol, chunk_range = DateRange(data[trimIndex]['date'])).values
-        if len(records) != 0:
-            newestDate = records[len(records)-1][1]
-            print("newest date is ")
-            print(newestDate)
+	if chunkStore.has_symbol(key):
+		trimIndex = 0
 
-            while trimIndex < len(data) and newestDate >= data[trimIndex]['date'] :
-                trimIndex+=1
+		try:
+			newestDate = chunkStore.read_metadata(key)['end']
+		except:
+			newestDate = 0
+		print("newest date is ")
+		print(newestDate)
 
-        if(len(data) == trimIndex): print("Data already written!")
-        else: chunkStore.append(tickSymbol, getDataFrame(data[trimIndex:]))
-    else:
-        df = getDataFrame(data)
-        chunkStore.write(tickSymbol, df, chunk_size='M')
-    print("Saving the data took "+str(time.time() - start)+" seconds")
+		while trimIndex < len(data) and newestDate >= data[trimIndex]['date'] :
+			trimIndex+=1
 
-def readData():
-    df = chunkStore.read(tickSymbol)
+		if(len(data) == trimIndex): print("Data already written!")
+		else:
+			metadata = chunkStore.read_metadata(key)
+			print("Got metadata", metadata)
+			chunkStore.append(key, getDataFrame(data[trimIndex:]))
 
-    print("Reading the fifth row")
+			metadata['end'] = data[len(data)-1]['date']
+			chunkStore.write_metadata(key, metadata)
+	else:
+		df = getDataFrame(data)
+		chunkStore.write(key, df, chunk_size=chunkSize)
+		chunkStore.write_metadata(key, {'start': data[0]['date'], 'end': data[len(data)-1]['date'] })
+	print("Saving the data took "+str(time.time() - start)+" seconds")
 
-    values = df.values
+def readData(key):
+	try:
+		df = chunkStore.read(key)
+	except:
+		print("Error:", sys.exc_info()[0])
+		return	
+	print("Reading the fifth row")
 
-    print(values[4])
+	values = df.values
+
+	print(values[4])
 
 def printData(key, n = 5 ):
-    start = time.time()
-    df = chunkStore.read(key)
-    print(df.head(n))
-    print('...')
-    print(df.tail(n))
-    print(len(df.values))
-    print("Displaying the data took "+str(time.time() - start)+" seconds")
+	start = time.time()
 
-#if chunkStore.has_symbol(tickSymbol) : chunkStore.delete(tickSymbol) #used for debugging
+	try:
+		df = chunkStore.read(key)
+	except:
+		print("Error:", sys.exc_info()[0])
+		return
+	print(df.head(n))
+	print('...')
+	print(df.tail(n))
+	print(len(df.values))
+	print("Displaying the data took "+str(time.time() - start)+" seconds")
 
-data = loadRawData() #get it
+def saveCourse(key, filepath, processor):
+	data = loadRawData(filepath) #get it
 
-print("Loaded data with length "+str(len(data))+" ticks")
+	print("Loaded data with length "+str(len(data))+" ticks") #debug
 
-processRawData(data) #process a bit to make it suitable for storage
+	processor(data) #process a bit to make it suitable for storage
 
-saveData(data[:100])
-saveData(data[100:])
+	saveData(key, data, courseChunkSize) #save to db
 
-printData(tickSymbol)
+def removeDB(key):
+	if chunkStore.has_symbol(key):
+		chunkStore.delete(key) #used for debugging
+		print("Removed database")
 
-readData()
+def peekDB(key):
+	printData(key)
+
+def readDB(key):
+	readData(key)
+
+def getLatestRow(key):
+	latestDate = chunkStore.read_metadata(key)['end']
+	return chunkStore.read(key, chunk_range = DateRange(latestDate, None))
+
+def callDataDownloader(start, count):
+	success = execute_js('data-downloader.js', 'blockchain '+str(start)+' '+str(count))
+	if not success: print("Failed to execute js")
+
+def downloadBlockchain():
+	try:
+		tmp = getLatestRow(blKey) #get a dataframe with only the latest row
+		currentBlock = tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
+	except:
+		currentBlock = 0
+
+	print("Starting to download blocks after", currentBlock)
+
+	series = 10000
+	while currentBlock < 4146000:
+		print('Calling js to download from '+str(currentBlock)+' '+str(series)+' blocks')
+		callDataDownloader(currentBlock, series)
+		filename = 'data/blocks '+str(currentBlock)+'-'+str(currentBlock+series-1)+'.json'
+		data = loadRawData(filename) #get it
+
+		if data == None:
+			print("Failed reading", filename, ", redownloading...")
+			continue
+
+		os.remove(filename)
+
+		transactions = []
+		for block in data:
+			block['date'] = dt.fromtimestamp(block['date'])
+			for tx in block['transactions']:
+				tx['date'] = block['date']
+				transactions.append(tx)
+			block.pop('transactions', None)
+
+		saveData(blKey, data, blockChunkSize)
+		if len(transactions) > 0 :
+			saveData(txKey, transactions, txChunkSize)
+
+		currentBlock += series
+
+def printHelp():
+	print("Arguments:")
+	print("remove - removes the db")
+	print("save - saves the json input in the db without overriding previously saved data")
+	print("peek - shows the first and last rows of the db")
+	print("read - loads the db in memory")
+	print("upgrade - downloads, loads and saves the data from the blockchain and course")
+
+for arg in sys.argv:
+	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
+	elif arg == 'remove':
+		removeDB(tickKey)
+		removeDB(blKey)
+		removeDB(txKey)
+	elif arg == 'save': saveCourse(tickKey, 'data/poloniex_price_data.json', processRawData)
+	elif arg == 'peek':
+		peekDB(blKey)
+		peekDB(txKey)
+	elif arg == 'read': readDB(tickKey)
+	elif arg == 'upgrade': upgradeDB(tickKey)
+	elif arg == 'blockchain':
+		downloadBlockchain()
