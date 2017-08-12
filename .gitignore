@@ -2,3 +2,10 @@ node_modules/
 log.txt
 data/
 .vscode/
+.node-xmlhttprequest-sync-*
+json
+os
+pickle
+sys
+time
+pd
