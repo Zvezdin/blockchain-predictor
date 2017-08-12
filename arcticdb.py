@@ -108,7 +108,9 @@ def printData(key, n = 5 ):
 	print(len(df.values))
 	print("Displaying the data took "+str(time.time() - start)+" seconds")
 
-def saveCourse(key, filepath, processor):
+def saveCourse(key, processor):
+	callDataDownloaderCourse()
+	filepath = 'data/poloniex_price_data.json'
 	data = loadRawData(filepath) #get it
 
 	print("Loaded data with length "+str(len(data))+" ticks") #debug
@@ -132,7 +134,11 @@ def getLatestRow(key):
 	latestDate = chunkStore.read_metadata(key)['end']
 	return chunkStore.read(key, chunk_range = DateRange(latestDate, None))
 
-def callDataDownloader(start, count):
+def callDataDownloaderCourse():
+	success = execute_js('data-downloader.js', 'course')
+	if not success: print("Failed to execute js")
+
+def callDataDownloaderBlockchain(start, count):
 	success = execute_js('data-downloader.js', 'blockchain '+str(start)+' '+str(count))
 	if not success: print("Failed to execute js")
 
@@ -148,7 +154,7 @@ def downloadBlockchain():
 	series = 10000
 	while currentBlock < 4146000:
 		print('Calling js to download from '+str(currentBlock)+' '+str(series)+' blocks')
-		callDataDownloader(currentBlock, series)
+		callDataDownloaderBlockchain(currentBlock, series)
 		filename = 'data/blocks '+str(currentBlock)+'-'+str(currentBlock+series-1)+'.json'
 		data = loadRawData(filename) #get it
 
@@ -175,10 +181,11 @@ def downloadBlockchain():
 def printHelp():
 	print("Arguments:")
 	print("remove - removes the db")
-	print("save - saves the json input in the db without overriding previously saved data")
+	print("course - downloads and saves / upgrades historical course in the db")
+	print("blockchain - downloads and saves / upgrades blockchain data in the db")
 	print("peek - shows the first and last rows of the db")
 	print("read - loads the db in memory")
-	print("upgrade - downloads, loads and saves the data from the blockchain and course")
+	print("upgrade - updates both blockchain and course db entries")
 
 for arg in sys.argv:
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
@@ -186,7 +193,7 @@ for arg in sys.argv:
 		removeDB(tickKey)
 		removeDB(blKey)
 		removeDB(txKey)
-	elif arg == 'save': saveCourse(tickKey, 'data/poloniex_price_data.json', processRawData)
+	elif arg == 'course': saveCourse(tickKey, processRawData)
 	elif arg == 'peek':
 		peekDB(blKey)
 		peekDB(txKey)
