@@ -32,7 +32,7 @@ You're all set!
 Run geth initially and wait for it to sync with the following command:
 
 ```bash
-geth --fast --cache 2014
+geth --fast --cache 2048
 ```
 The initial sync can take multiple hours
 
@@ -63,7 +63,7 @@ For more info, run:
 node data-downloader.js help
 ```
 
-All data is saved in folder data relative to the script as .json files.
+All data is saved in folder data relative to the script as ```.json``` files.
 
 ### Database usage and managemenet
 
