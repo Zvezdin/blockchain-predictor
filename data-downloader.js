@@ -175,7 +175,7 @@ var blockchain = [];
 function validateBlocks(dict, first, len, handler){ //checks to see if all blocks are reseived accordingly and requests the missing ones
 	for(bl = 0; bl < len; bl++){
 		if(dict[bl+first] == null){
-			getBlock(bl, handler);
+			getBlock(bl+first, handler);
 			console.log("Requesting missing block #"+(bl+first));
 			return false;
 		}
