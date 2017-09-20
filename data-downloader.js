@@ -12,6 +12,10 @@ var debug = true;
 
 var datadir = 'data/'
 
+const maxAsyncRequests = 3;
+
+var requestedBlocks = 0;
+
 function initBlockchain(){
 	if (typeof web3 !== 'undefined') {
 		web3 = new Web3(web3.currentProvider);
@@ -81,10 +85,6 @@ function downloadWholeCourse(){
 		//console.log(result);
 	});
 }
-
-const maxAsyncRequests = 900;
-
-var requestedBlocks = 0;
 
 function downloadBlockchain(startBlock, expectedBlocks){
 

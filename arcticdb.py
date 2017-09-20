@@ -21,6 +21,9 @@ blockChunkSize = 'W'
 txChunkSize = 'D'
 courseChunkSize = 'M'
 
+blockSeries = 10000
+attemptsThreshold = 10
+
 store = Arctic('localhost')
 
 chunkStore = 0
@@ -142,52 +145,70 @@ def callDataDownloaderBlockchain(start, count):
 	success = execute_js('data-downloader.js', 'blockchain '+str(start)+' '+str(count))
 	if not success: print("Failed to execute js")
 
-def downloadBlockchain():
-	try:
-		tmp = getLatestRow(blKey) #get a dataframe with only the latest row
-		currentBlock = tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
-	except:
-		currentBlock = 0
+def downloadBlockchain(start = 0, targetBlock = None):
+	currentBlock = getLatestBlock()
 
-	print("Starting to download blocks after", currentBlock)
+	if(currentBlock == 0): currentBlock = start
 
-	series = 10000
-	while currentBlock < 4146000:
-		print('Calling js to download from '+str(currentBlock)+' '+str(series)+' blocks')
+	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
+
+	series = blockSeries
+
+	attempts = 0
+
+	while currentBlock < (targetBlock if targetBlock != None else 4146000):
+		print('Calling js to download '+str(series)+' blocks from '+str(currentBlock))
 		callDataDownloaderBlockchain(currentBlock, series)
 		filename = 'data/blocks '+str(currentBlock)+'-'+str(currentBlock+series-1)+'.json'
 		data = loadRawData(filename) #get it
 
 		if data == None:
 			print("Failed reading", filename, ", redownloading...")
+			attempts += 1
+
+			if(attempts > attemptsThreshold):
+				print("Too many failed attempts, aborting operation.")
+				return
 			continue
 
+		attempts = 0
 		os.remove(filename)
 
-		transactions = []
-		for block in data:
-			block['date'] = dt.fromtimestamp(block['date'])
-			for tx in block['transactions']:
-				tx['date'] = block['date']
-				transactions.append(tx)
-			block.pop('transactions', None)
+		blocks, transactions = processRawBlockchainData(data)
 
-		saveData(blKey, data, blockChunkSize)
+		saveData(blKey, blocks, blockChunkSize) #save block data
 		if len(transactions) > 0 :
-			saveData(txKey, transactions, txChunkSize)
+			saveData(txKey, transactions, txChunkSize) #save tx,t oo
 
 		currentBlock += series
+
+def processRawBlockchainData(data):
+	transactions = []
+	for block in data:
+		block['date'] = dt.fromtimestamp(block['date']) #transfer date string to date object, used to filter and manage the dt
+		for tx in block['transactions']:
+			tx['date'] = block['date']
+			transactions.append(tx)
+		block.pop('transactions', None) #remove the transactions from blockcdata - we work with them separately
+	return data, transactions
+
+def getLatestBlock():
+	try:
+		tmp = getLatestRow(blKey) #get a dataframe with only the latest row
+		return tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
+	except:
+		return 0
 
 def printHelp():
 	print("Arguments:")
 	print("remove - removes the db")
 	print("course - downloads and saves / upgrades historical course in the db")
-	print("blockchain - downloads and saves / upgrades blockchain data in the db")
+	print("blockchain - downloads and saves / upgrades blockchain data in the db. Enter a start and an end block to download all blocks within that range.")
 	print("peek - shows the first and last rows of the db")
 	print("read - loads the db in memory")
 	print("upgrade - updates both blockchain and course db entries")
 
-for arg in sys.argv:
+for i, arg in enumerate(sys.argv):
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
 	elif arg == 'remove':
 		removeDB(tickKey)
@@ -200,4 +221,7 @@ for arg in sys.argv:
 	elif arg == 'read': readDB(tickKey)
 	elif arg == 'upgrade': upgradeDB(tickKey)
 	elif arg == 'blockchain':
-		downloadBlockchain()
+		try:
+			downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument
+		except:
+			downloadBlockchain() #if not, pass none
