@@ -14,11 +14,11 @@ import sys
 import os
 from Naked.toolshed.shell import execute_js, muterun_js
 
-import database-tools
+from database_tools import *
 
 tickKey = 'test2'
 txKey = 'tx'
-blKey =  'block'
+blKey = 'block'
 blockChunkSize = 'W'
 txChunkSize = 'D'
 courseChunkSize = 'M'
@@ -30,11 +30,11 @@ storeKey = 'chunkstore'
 
 priceDataFile = 'data/poloniex_price_data.json'
 
-chunkStore = getStore(storeKey)
+chunkStore = getLibrary(storeKey)
 
-if(chunkSize == None)
-	initLibrary('chunkstore', lib_type=CHUNK_STORE)
-	getStore('chunkstore')
+if(chunkStore == None):
+	initLibrary('chunkstore', CHUNK_STORE)
+	getLibrary('chunkstore')
 
 def loadRawData(filepath):
 
@@ -83,15 +83,15 @@ def saveData(key, data, chunkSize = courseChunkSize):
 			#update the metadata and save the trimmed data
 			metadata = chunkStore.read_metadata(key)
 			print("Got metadata", metadata)
-			chunkStore.append(key, getDataFrame(data[trimIndex:]))
-
+			
 			metadata['end'] = data[len(data)-1]['date']
+			
+			chunkStore.append(key, getDataFrame(data[trimIndex:]), metadata)
 			chunkStore.write_metadata(key, metadata)
 	else:
 		#create the store of this new data
 		df = getDataFrame(data)
-		chunkStore.write(key, df, chunk_size=chunkSize)
-		chunkStore.write_metadata(key, {'start': data[0]['date'], 'end': data[len(data)-1]['date'] })
+		chunkStore.write(key, df, {'start': data[0]['date'], 'end': data[len(data)-1]['date'] }, chunk_size=chunkSize)
 	print("Saving the data took "+str(time.time() - start)+" seconds")
 
 #reads all data in memory. Eats all the ram.
@@ -112,14 +112,16 @@ def printData(key, n = 5 ):
 	start = time.time()
 
 	try:
-		df = chunkStore.read(key)
+		#df = chunkStore.read(key)
+		head = getLatestRow(key, False)
+		tail = getFirstRow(key, False)
 	except:
 		print("Error:", sys.exc_info()[0])
 		return
-	print(df.head(n))
+	print(tail.head(n))
 	print('...')
-	print(df.tail(n))
-	print(len(df.values))
+	print(head.tail(n))
+	print(len(head.values), len(tail.values))
 	print("Displaying the data took "+str(time.time() - start)+" seconds")
 
 def downloadCourse(key):
@@ -139,9 +141,17 @@ def peekDB(key):
 def readDB(key):
 	readData(key)
 
-def getLatestRow(key):
+def getLatestRow(key, filter = True):
 	latestDate = chunkStore.read_metadata(key)['end']
-	return chunkStore.read(key, chunk_range = DateRange(latestDate, None))
+	#return chunkStore.read(key, chunk_range = DateRange(latestDate, None))
+	return getData(key, latestDate, None, filter)
+
+def getFirstRow(key, filter = True):
+	firstDate = chunkStore.read_metadata(key)['start']
+	return getData(key, None, firstDate, filter)
+
+def getData(key, startDate, endDate, filter):
+	return chunkStore.read(key, chunk_range = DateRange(startDate, endDate), filter_data = filter)
 
 def callDataDownloaderCourse():
 	success = execute_js('data-downloader.js', 'course')
@@ -188,7 +198,7 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 		currentBlock += series
 
-def getBlockchainFile(arg2, arg2): #the resulting file from the download script should match the requested arguments
+def getBlockchainFile(arg1, arg2): #the resulting file from the download script should match the requested arguments
 	return 'data/blocks '+str(arg1)+'-'+str(arg2)+'.json'
 
 def processRawBlockchainData(data):
@@ -222,7 +232,7 @@ for i, arg in enumerate(sys.argv):
 	elif arg == 'remove':
 		removeDB(tickKey, storeKey)
 		removeDB(blKey, storeKey)
-		removeDB(txKey storeKey)
+		removeDB(txKey, storeKey)
 	elif arg == 'course': downloadCourse(tickKey)
 	elif arg == 'peek':
 		peekDB(blKey)
