@@ -14,21 +14,15 @@ import sys
 import os
 from Naked.toolshed.shell import execute_js, muterun_js
 
-storeKey = 'chunkstore'
-propKey = 'prop'
+from database_tools import *
 
-
-
-chunkStore = getStore(storeKey)
-if(chunkStore == None):
-	print("Unable to load database store! Make sure that the data has been downloaded and saved.")
-
+chunkStore = getChunkstore()
 
 
 def printHelp():
-    print("Script that uses downloaded blockchain and course data to generate and save data properties.")
-    print("Arguments:")
-    print("remove : removes the database entries of generated properties.")
+	print("Script that uses downloaded blockchain and course data to generate and save data properties.")
+	print("Arguments:")
+	print("remove : removes the database entries of generated properties.")
 
 
 for i, arg in enumerate(sys.argv):
