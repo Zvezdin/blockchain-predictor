@@ -14,6 +14,8 @@ import sys
 import os
 from Naked.toolshed.shell import execute_js, muterun_js
 
+import database-tools
+
 tickKey = 'test2'
 txKey = 'tx'
 blKey =  'block'
@@ -24,14 +26,15 @@ courseChunkSize = 'M'
 blockSeries = 10000
 attemptsThreshold = 10
 
-store = Arctic('localhost')
+storeKey = 'chunkstore'
 
-chunkStore = 0
-try:
-	chunkStore = store['chunkstore']
-except:
-	store.initialize_library('chunkstore', lib_type=CHUNK_STORE)
-	chunkStore = store['chunkstore']
+priceDataFile = 'data/poloniex_price_data.json'
+
+chunkStore = getStore(storeKey)
+
+if(chunkSize == None)
+	initLibrary('chunkstore', lib_type=CHUNK_STORE)
+	getStore('chunkstore')
 
 def loadRawData(filepath):
 
@@ -44,7 +47,7 @@ def loadRawData(filepath):
 			return loadedData
 	except:
 		return None
-def processRawData(data):
+def processRawCourseData(data):
 
 	start = time.time()
 	for x in data:
@@ -58,9 +61,11 @@ def getDataFrame(data):
 def saveData(key, data, chunkSize = courseChunkSize):
 	start = time.time()
 
+	#if we have started writing this data before
 	if chunkStore.has_symbol(key):
 		trimIndex = 0
 
+		#read the last saved timestamp
 		try:
 			newestDate = chunkStore.read_metadata(key)['end']
 		except:
@@ -68,11 +73,14 @@ def saveData(key, data, chunkSize = courseChunkSize):
 		print("newest date is ")
 		print(newestDate)
 
+		#find out where to trim the data so we don't write the same items, in case of an overlap
 		while trimIndex < len(data) and newestDate >= data[trimIndex]['date'] :
 			trimIndex+=1
 
+		#if there is nothing new to write
 		if(len(data) == trimIndex): print("Data already written!")
 		else:
+			#update the metadata and save the trimmed data
 			metadata = chunkStore.read_metadata(key)
 			print("Got metadata", metadata)
 			chunkStore.append(key, getDataFrame(data[trimIndex:]))
@@ -80,11 +88,13 @@ def saveData(key, data, chunkSize = courseChunkSize):
 			metadata['end'] = data[len(data)-1]['date']
 			chunkStore.write_metadata(key, metadata)
 	else:
+		#create the store of this new data
 		df = getDataFrame(data)
 		chunkStore.write(key, df, chunk_size=chunkSize)
 		chunkStore.write_metadata(key, {'start': data[0]['date'], 'end': data[len(data)-1]['date'] })
 	print("Saving the data took "+str(time.time() - start)+" seconds")
 
+#reads all data in memory. Eats all the ram.
 def readData(key):
 	try:
 		df = chunkStore.read(key)
@@ -97,6 +107,7 @@ def readData(key):
 
 	print(values[4])
 
+#Prints the start and end of the data
 def printData(key, n = 5 ):
 	start = time.time()
 
@@ -111,21 +122,16 @@ def printData(key, n = 5 ):
 	print(len(df.values))
 	print("Displaying the data took "+str(time.time() - start)+" seconds")
 
-def saveCourse(key, processor):
+def downloadCourse(key):
 	callDataDownloaderCourse()
-	filepath = 'data/poloniex_price_data.json'
-	data = loadRawData(filepath) #get it
 
-	print("Loaded data with length "+str(len(data))+" ticks") #debug
+	data = loadRawData(priceDataFile) #get it
 
-	processor(data) #process a bit to make it suitable for storage
+	print("Downloaded data with length "+str(len(data))+" ticks") #debug
+
+	processRawCourseData(data) #process a bit to make it suitable for storage
 
 	saveData(key, data, courseChunkSize) #save to db
-
-def removeDB(key):
-	if chunkStore.has_symbol(key):
-		chunkStore.delete(key) #used for debugging
-		print("Removed database")
 
 def peekDB(key):
 	printData(key)
@@ -148,7 +154,7 @@ def callDataDownloaderBlockchain(start, count):
 def downloadBlockchain(start = 0, targetBlock = None):
 	currentBlock = getLatestBlock()
 
-	if(currentBlock == 0): currentBlock = start
+	if(currentBlock < 0): currentBlock = start
 
 	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
 
@@ -156,10 +162,10 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 	attempts = 0
 
-	while currentBlock < (targetBlock if targetBlock != None else 4146000):
+	while currentBlock < (targetBlock if targetBlock != None else 4146000): #todo determine the end of the blockchain automatically
 		print('Calling js to download '+str(series)+' blocks from '+str(currentBlock))
 		callDataDownloaderBlockchain(currentBlock, series)
-		filename = 'data/blocks '+str(currentBlock)+'-'+str(currentBlock+series-1)+'.json'
+		filename = getBlockchainFile(currentBlock, currentBlock+series-1)
 		data = loadRawData(filename) #get it
 
 		if data == None:
@@ -182,6 +188,9 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 		currentBlock += series
 
+def getBlockchainFile(arg2, arg2): #the resulting file from the download script should match the requested arguments
+	return 'data/blocks '+str(arg1)+'-'+str(arg2)+'.json'
+
 def processRawBlockchainData(data):
 	transactions = []
 	for block in data:
@@ -197,7 +206,7 @@ def getLatestBlock():
 		tmp = getLatestRow(blKey) #get a dataframe with only the latest row
 		return tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
 	except:
-		return 0
+		return -1
 
 def printHelp():
 	print("Arguments:")
@@ -211,10 +220,10 @@ def printHelp():
 for i, arg in enumerate(sys.argv):
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
 	elif arg == 'remove':
-		removeDB(tickKey)
-		removeDB(blKey)
-		removeDB(txKey)
-	elif arg == 'course': saveCourse(tickKey, processRawData)
+		removeDB(tickKey, storeKey)
+		removeDB(blKey, storeKey)
+		removeDB(txKey storeKey)
+	elif arg == 'course': downloadCourse(tickKey)
 	elif arg == 'peek':
 		peekDB(blKey)
 		peekDB(txKey)
