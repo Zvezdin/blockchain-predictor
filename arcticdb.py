@@ -146,7 +146,7 @@ for i, arg in enumerate(sys.argv):
 		peekData(chunkStore, txKey)
 	elif arg == 'read':
 		try:
-			readData(chunkStore, sys.argv[i+1])
+			readAllData(chunkStore, sys.argv[i+1])
 		except:
 			print("There was an error while reading. Did you enter the correct key?")
 	elif arg == 'upgrade': upgradeDB(tickKey)

@@ -23,7 +23,6 @@ db = None
 #Methods for db management
 
 def init():
-	print("Initializing")
 	global db
 	db = Arctic('localhost')
 
@@ -114,17 +113,20 @@ def peekData(lib, key, n = 5 ):
 
 def getLatestRow(lib, key, filter = True):
 	latestDate = lib.read_metadata(key)['end']
-	return getData(lib, key, latestDate, None, filter)
+	return loadData(lib, key, latestDate, None, filter)
 
 def getFirstRow(lib, key, filter = True):
 	firstDate = lib.read_metadata(key)['start']
-	return getData(lib, key, None, firstDate, filter)
+	return loadData(lib, key, None, firstDate, filter)
 
-def getData(lib, key, startDate, endDate, filter):
+def loadData(lib, key, startDate, endDate, filter):
 	return lib.read(key, chunk_range = DateRange(startDate, endDate), filter_data = filter)
 
+def loadMetadata(lib, key):
+	return lib.read_metadata(key)
+
 #reads all data in memory. Eats all the ram.
-def readData(lib, key):
+def readAllData(lib, key):
 	start = time.time()
 	try:
 		df = lib.read(key)
