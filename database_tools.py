@@ -1,3 +1,5 @@
+import sys
+
 from arctic import Arctic
 from arctic import TICK_STORE
 from arctic import CHUNK_STORE
@@ -7,10 +9,7 @@ import pandas as pd
 from datetime import timezone, datetime as dt
 import time
 
-tickKey = 'test2'
-txKey = 'tx'
-blKey = 'block'
-propKey = 'prop'
+dbKeys = {'tick': 'test2', 'tx': 'tx', 'block': 'block'}
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
@@ -142,6 +141,10 @@ def readAllData(lib, key):
 	print(values[4])
 	print("Getting the values took "+str(time.time() - start)+"s")
 	print("The metadata is", loadMetadata(lib, key))
+
+#Pandas config for debug display
+pd.set_option("display.max_columns",999)
+pd.set_option('expand_frame_repr', False)
 
 #Init the module
 init()
