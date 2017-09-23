@@ -75,7 +75,10 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
 
+
 	series = blockSeries
+
+	if targetBlock != None and series > targetBlock - currentBlock: series = targetBlock - currentBlock
 
 	attempts = 0
 
@@ -134,7 +137,10 @@ def printHelp():
 	print("read - loads data in memory. Enter a db key to choose the data.")
 	print("upgrade - updates both blockchain and course db entries")
 
-for i, arg in enumerate(sys.argv):
+i = 0
+while i < len(sys.argv):
+	arg = sys.argv[i]
+
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
 	elif arg == 'remove':
 		removeDB(tickKey, storeKey)
@@ -144,14 +150,19 @@ for i, arg in enumerate(sys.argv):
 	elif arg == 'peek':
 		peekData(chunkStore, blKey)
 		peekData(chunkStore, txKey)
+		peekData(chunkStore, tickKey)
 	elif arg == 'read':
 		try:
 			readAllData(chunkStore, sys.argv[i+1])
+			i+=1
 		except:
 			print("There was an error while reading. Did you enter the correct key?")
+			break
 	elif arg == 'upgrade': upgradeDB(tickKey)
 	elif arg == 'blockchain':
 		try:
 			downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument
+			i+=2
 		except:
 			downloadBlockchain() #if not, pass none
+	i+=1
