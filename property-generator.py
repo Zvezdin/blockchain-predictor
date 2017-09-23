@@ -89,8 +89,7 @@ def forEachTick(callback, mainKey, t=1):
 
 				#print(data[key], tickData[key])
 
-				if not containsFullInterval(data[key], tickData[key]):
-					#possible bug - if the intervals we are using are larger than the chunk size.
+				while not containsFullInterval(data[key], tickData[key]):
 					data[key] = next(iterators[key]) #load another data chunk and append it
 					newPart = subsetByDate(data[key], currentStart, currentEnd)
 					tickData[key] = pd.concat([tickData[key], newPart])
