@@ -1,7 +1,7 @@
 from arctic import Arctic
 from arctic import TICK_STORE
 from arctic import CHUNK_STORE
-from arctic.date import DateRange
+from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
 import pandas as pd
 from datetime import timezone, datetime as dt
@@ -119,8 +119,8 @@ def getFirstRow(lib, key, filter = True):
 	firstDate = lib.read_metadata(key)['start']
 	return loadData(lib, key, None, firstDate, filter)
 
-def loadData(lib, key, startDate, endDate, filter):
-	return lib.read(key, chunk_range = DateRange(startDate, endDate), filter_data = filter)
+def loadData(lib, key, startDate, endDate, filter, interval = CLOSED_CLOSED):
+	return lib.read(key, chunk_range = DateRange(startDate, endDate, interval), filter_data = filter)
 
 def loadMetadata(lib, key):
 	return lib.read_metadata(key)
@@ -135,12 +135,13 @@ def readAllData(lib, key):
 		return
 	print("Loading took "+str(time.time() - start)+"s")
 	start = time.time()
-	print("Reading the fifth row")
+	print("The data is", df)
 
 	values = df.values
 
 	print(values[4])
 	print("Getting the values took "+str(time.time() - start)+"s")
+	print("The metadata is", loadMetadata(lib, key))
 
 #Init the module
 init()
