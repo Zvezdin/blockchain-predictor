@@ -18,11 +18,9 @@ npm install
 
 ### Python dependencies
 
-Install the following python packages via pip:
+Install the required python dependencies via the following script:
 ```bash
-pip install git+https://github.com/manahl/arctic.git
-pip install naked
-pip install pandas
+./pip-install.sh
 ```
 
 You're all set!
@@ -32,18 +30,18 @@ You're all set!
 Run geth initially and wait for it to sync with the following command:
 
 ```bash
-geth --fast --cache 2048
+geth --rpc --fast --cache 2048 --datadir /path/to/your/data
 ```
 The initial sync can take multiple hours
 
 Consecutive runs can be done via:
 ```bash
-geth
+geth --rpc --datadir /path/to/your/data
 ```
 
 Run an instance of MongoDB with:
 ```bash
-mongod
+mongod --dbpath /path/to/your/db
 ```
 
 ### Basic data gathering
@@ -82,6 +80,20 @@ python3 arcticdb.py blockchain
 For more info:
 ```bash
 python3 arcticdb.py help
+```
+
+### Generation of data properties
+
+Data properties are calculated from the raw data. They are features which can represent certain activity in a better way for the neural network. They are generated for each course tick (time interval for which we have course data). 
+
+To generate all of the available properties for all downloaded data, run the following command:
+```bash
+python3 property-generator.py generate
+```
+
+For more info:
+```bash
+python3 property-generator.py help
 ```
 
 ### Generation of a dataset
