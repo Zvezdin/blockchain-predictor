@@ -1,14 +1,6 @@
-from arctic import Arctic
-from arctic import TICK_STORE
-from arctic import CHUNK_STORE
-from arctic.date import DateRange
-
 import pandas as pd
-from datetime import timezone, datetime as dt
+from datetime import timezone, timedelta, datetime as dt
 import time
-
-import pickle
-import json
 
 import sys
 import os
@@ -21,17 +13,79 @@ from property import *
 
 chunkStore = getChunkstore()
 
+
+properties = [PropertyGasPrice()]
+propChunkSize = 'M'
+
+
 def generateProperties():
-	gas = PropertyGasPrice()
+	values = {} #a dict that holds an array of the returned values for each property
 
-	block, tx, course = loadDataForTick(chunkStore, dt(2017,7,9,23,52,47), dt(2017, 7, 10))
+	for prop in properties:
+		values[prop.name]= []
 
-	val = gas.processTick(block, tx, course)
+	def tickHandler(data, date):
+		for prop in properties:
+			block, tx, course = data
+			val = prop.processTick(block, tx, course)
+			print("Got value", val, "for property", prop.name)
+			values[prop.name].append({'date': date, prop.name: val})
 
-	print("Got value", val)
+	forEachTick(tickHandler)
+
+	for prop in properties:
+		df = getDataFrame(values[prop.name])
+		print("Saving prop " + prop.name+ " with values ", df)
+		saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
+
+
+
+def forEachTick(callback, tSeconds = 5*60, cache = 10):
+	t = timedelta(seconds = tSeconds)
+	cacheT = timedelta(seconds = cache*tSeconds)
+
+	#get the time interval where we have all needed data
+	t1, t2, t3 = loadMetadata(chunkStore, blKey)['start'], loadMetadata(chunkStore, txKey)['start'], loadMetadata(chunkStore, tickKey)['start']
+
+	start = max(t1, t2)
+	start = max(start, t3)
+
+	t1, t2, t3 = loadMetadata(chunkStore, blKey)['end'], loadMetadata(chunkStore, txKey)['end'], loadMetadata(chunkStore, tickKey)['end']
+
+	end = min(t1, t2)
+	end = min(end, t3)
+
+	currentStart = start
+	currentEnd = currentStart + t
+
+	loadedStart = currentStart
+	loadedEnd = min(loadedStart + cacheT, end)
+
+	print("Starting generating properties from", start, "to", end)
+
+	while True:
+		print("Loading data for dates", loadedStart, loadedEnd)
+		data = loadDataForTick(chunkStore, loadedStart, loadedEnd) #load a large portion of the data and cache it in the RAM.
+
+		while currentEnd <= loadedEnd: #break that large portion of data in smaller intervals that are passed to the callback
+			print("Processing data from", currentStart, "to", currentEnd)
+			callback([subsetByDate(data[x], currentStart, currentEnd) for x in range(len(data))], currentEnd)
+			currentStart += t #sliding window
+			currentEnd = currentStart + t
+
+		loadedStart += cacheT #sliding window over the timeline
+		loadedEnd = min(loadedStart + cacheT, end)
+
+		if currentEnd > end:
+			break
 
 def loadDataForTick(lib, start, end):
 	return loadData(lib, blKey, start, end, True), loadData(lib, txKey, start, end, True), loadData(lib, tickKey, start, end, True)
+
+def subsetByDate(data, start, end):
+	"""Function that takes in a DataFrame and start and end dates, returning the subset of the frame with these dates"""
+	a = data[data.date >= start]
+	return a[a.date < end]
 
 def printHelp():
 	print("Script that uses downloaded blockchain and course data to generate and save data properties.")
