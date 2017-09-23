@@ -102,9 +102,9 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 		blocks, transactions = processRawBlockchainData(data)
 
-		saveData(chunkStore, dbKeys.block, blocks, blockChunkSize) #save block data
+		saveData(chunkStore, dbKeys['block'], blocks, blockChunkSize) #save block data
 		if len(transactions) > 0 :
-			saveData(chunkStore, dbKeys.tx, transactions, txChunkSize) #save tx,t oo
+			saveData(chunkStore, dbKeys['tx'], transactions, txChunkSize) #save tx,t oo
 
 		currentBlock += series
 
@@ -123,7 +123,7 @@ def processRawBlockchainData(data):
 
 def getLatestBlock():
 	try:
-		tmp = getLatestRow(chunkStore, dbKeys.block) #get a dataframe with only the latest row
+		tmp = getLatestRow(chunkStore, dbKeys['block']) #get a dataframe with only the latest row
 		return tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
 	except:
 		return -1
@@ -143,14 +143,14 @@ while i < len(sys.argv):
 
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
 	elif arg == 'remove':
-		removeDB(dbKeys.tick, storeKey)
-		removeDB(dbKeys.block, storeKey)
-		removeDB(dbKeys.tx, storeKey)
-	elif arg == 'course': downloadCourse(dbKeys.tick)
+		removeDB(dbKeys['tick'], storeKey)
+		removeDB(dbKeys['block'], storeKey)
+		removeDB(dbKeys['tx'], storeKey)
+	elif arg == 'course': downloadCourse(dbKeys['tick'])
 	elif arg == 'peek':
-		peekData(chunkStore, dbKeys.block)
-		peekData(chunkStore, dbKeys.tx)
-		peekData(chunkStore, dbKeys.tick)
+		peekData(chunkStore, dbKeys['block'])
+		peekData(chunkStore, dbKeys['tx'])
+		peekData(chunkStore, dbKeys['tick'])
 	elif arg == 'read':
 		try:
 			readAllData(chunkStore, sys.argv[i+1])
@@ -158,7 +158,7 @@ while i < len(sys.argv):
 		except:
 			print("There was an error while reading. Did you enter the correct key?")
 			break
-	elif arg == 'upgrade': upgradeDB(dbKeys.tick)
+	elif arg == 'upgrade': upgradeDB(dbKeys['tick'])
 	elif arg == 'blockchain':
 		try:
 			downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument
