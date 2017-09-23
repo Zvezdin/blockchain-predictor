@@ -31,61 +31,84 @@ def generateProperties():
 			print("Got value", val, "for property", prop.name)
 			values[prop.name].append({'date': date, prop.name: val})
 
-	forEachTick(tickHandler)
+	print("working with keys", dbKeys)
+
+	forEachTick(tickHandler, dbKeys['tick'])
 
 	for prop in properties:
 		df = getDataFrame(values[prop.name])
 		print("Saving prop " + prop.name+ " with values ", df)
-		saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
+		#saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
 
 
 
-def forEachTick(callback, tSeconds = 5*60, cache = 10):
-	t = timedelta(seconds = tSeconds)
-	cacheT = timedelta(seconds = cache*tSeconds)
-
+def forEachTick(callback, mainKey, t=1):
 	#get the time interval where we have all needed data
-	t1, t2, t3 = loadMetadata(chunkStore, blKey)['start'], loadMetadata(chunkStore, txKey)['start'], loadMetadata(chunkStore, tickKey)['start']
+	start = max([loadMetadata(chunkStore, key)['start'] for key in dbKeys.values()])
 
-	start = max(t1, t2)
-	start = max(start, t3)
-
-	t1, t2, t3 = loadMetadata(chunkStore, blKey)['end'], loadMetadata(chunkStore, txKey)['end'], loadMetadata(chunkStore, tickKey)['end']
-
-	end = min(t1, t2)
-	end = min(end, t3)
-
-	currentStart = start
-	currentEnd = currentStart + t
-
-	loadedStart = currentStart
-	loadedEnd = min(loadedStart + cacheT, end)
+	end = min([loadMetadata(chunkStore, key)['end'] for key in dbKeys.values()])
 
 	print("Starting generating properties from", start, "to", end)
 
-	while True:
-		print("Loading data for dates", loadedStart, loadedEnd)
-		data = loadDataForTick(chunkStore, loadedStart, loadedEnd) #load a large portion of the data and cache it in the RAM.
+	lastEnd = None
 
-		while currentEnd <= loadedEnd: #break that large portion of data in smaller intervals that are passed to the callback
-			print("Processing data from", currentStart, "to", currentEnd)
-			callback([subsetByDate(data[x], currentStart, currentEnd) for x in range(len(data))], currentEnd)
-			currentStart += t #sliding window
-			currentEnd = currentStart + t
+	mainData = chunkStore.read(mainKey, chunk_range=DateRange(start, end))
 
-		loadedStart += cacheT #sliding window over the timeline
-		loadedEnd = min(loadedStart + cacheT, end)
+	print("Loaded mainData:", mainData)
 
-		if currentEnd > end:
-			break
+	iterators = {}
+
+	for key in dbKeys.values():
+		#if key == mainKey: continue
+		iterators[key] = chunkStore.iterator(key, chunk_range=DateRange(start, end))
+
+	data = {}#[next(iterators[i]) for i in range(len(iterators))]
+
+	for key in iterators: # load the first chunks for all data
+		data[key] = next(iterators[key])
+
+	for mainRow in mainData.iterrows():
+		rowData = mainRow[1]
+
+		if rowData.date < start or rowData.date > end: continue #we don't want to be doing anything outside of our main interval
+
+		if lastEnd is None: lastEnd = rowData.date #if this is the first row we read
+		else:
+			#our interval is > lastEnd and <= rowData.date
+			currentStart = lastEnd
+			currentEnd = rowData.date
+			lastEnd = currentEnd
+
+			print("Loading data for dates", currentStart, currentEnd)
+
+			#load the needed data
+
+			tickData = {}
+			for key in data:
+				tickData[key] = subsetByDate(data[key], currentStart, currentEnd)
+
+				#print(data[key], tickData[key])
+
+				if not containsFullInterval(data[key], tickData[key]):
+					#possible bug - if the intervals we are using are larger than the chunk size.
+					data[key] = next(iterators[key]) #load another data chunk and append it
+					newPart = subsetByDate(data[key], currentStart, currentEnd)
+					tickData[key] = pd.concat([tickData[key], newPart])
+				print(tickData[key].head(2))
+				print(tickData[key].tail(2))
+
+			callback([tickData[key] for key in tickData], currentEnd)
 
 def loadDataForTick(lib, start, end):
-	return loadData(lib, blKey, start, end, True), loadData(lib, txKey, start, end, True), loadData(lib, tickKey, start, end, True)
+	return [loadData(lib, key, start, end, True) for key in dbKeys]
 
 def subsetByDate(data, start, end):
 	"""Function that takes in a DataFrame and start and end dates, returning the subset of the frame with these dates"""
-	a = data[data.date >= start]
-	return a[a.date < end]
+	return data[(data.date > start) & (data.date <= end)]
+
+def containsFullInterval(data, subset):
+	if len(subset) == 0: return False
+	return (data.iloc[0].date <= subset.iloc[0].date) and (data.iloc[len(data)-1].date >= subset.iloc[len(subset)-1].date)
 
 def printHelp():
 	print("Script that uses downloaded blockchain and course data to generate and save data properties.")
@@ -96,6 +119,7 @@ def printHelp():
 for i, arg in enumerate(sys.argv):
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
 	elif arg == 'remove':
-		removeDB(propKey, storeKey)
+		for prop in properties:
+			removeDB(prop.name, storeKey)
 	elif arg == 'generate':
 		generateProperties()

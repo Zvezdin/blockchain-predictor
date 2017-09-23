@@ -12,7 +12,9 @@ class PropertyGasPrice(Property):
 		avg = 0
 		for i in range(len(val)):
 			avg += int(val[i][index])
-		if avg == 0 or len(val) == 0: print(tx) #debug
+		if avg == 0 or len(val) == 0:
+			print("Got no real data!")
+			print(tx) #debug
 		avg /= len(val)
 
 		return avg
