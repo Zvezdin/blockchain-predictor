@@ -1,20 +1,18 @@
+import sys
+import os
+from datetime import timezone, datetime as dt
+import time
+import pickle
+import json
+
+import pandas as pd
+from Naked.toolshed.shell import execute_js, muterun_js
 from arctic import Arctic
 from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange
 
-import pandas as pd
-from datetime import timezone, datetime as dt
-import time
-
-import pickle
-import json
-
-import sys
-import os
-from Naked.toolshed.shell import execute_js, muterun_js
-
-from database_tools import *
+import database_tools as db
 
 blockSeries = 10000
 attemptsThreshold = 10
@@ -23,7 +21,7 @@ attemptsThreshold = 10
 priceDataFile = 'data/poloniex_price_data.json'
 dataDownloaderScript = '--max-old-space-size=4076 data-downloader.js'
 
-chunkStore = getChunkstore()
+chunkStore = db.getChunkstore()
 
 def loadRawData(filepath):
 
@@ -57,7 +55,7 @@ def downloadCourse(key):
 
 	processRawCourseData(data) #process a bit to make it suitable for storage
 
-	saveData(chunkStore, key, data, courseChunkSize) #save to db
+	db.saveData(chunkStore, key, data, db.courseChunkSize) #save to db
 
 
 def callDataDownloaderCourse():
@@ -102,9 +100,9 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 		blocks, transactions = processRawBlockchainData(data)
 
-		saveData(chunkStore, dbKeys['block'], blocks, blockChunkSize) #save block data
+		db.saveData(chunkStore, db.dbKeys['block'], blocks, db.blockChunkSize) #save block data
 		if len(transactions) > 0 :
-			saveData(chunkStore, dbKeys['tx'], transactions, txChunkSize) #save tx,t oo
+			db.saveData(chunkStore, db.dbKeys['tx'], transactions, db.txChunkSize) #save tx,t oo
 
 		currentBlock += series
 
@@ -123,7 +121,7 @@ def processRawBlockchainData(data):
 
 def getLatestBlock():
 	try:
-		tmp = getLatestRow(chunkStore, dbKeys['block']) #get a dataframe with only the latest row
+		tmp = db.getLatestRow(chunkStore, db.dbKeys['block']) #get a dataframe with only the latest row
 		return tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
 	except:
 		return -1
@@ -141,7 +139,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		arg = sys.argv[i]
 
 		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
-		elif arg == 'course': downloadCourse(dbKeys['tick'])
+		elif arg == 'course': downloadCourse(db.dbKeys['tick'])
 		elif arg == 'blockchain':
 			try:
 				downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument

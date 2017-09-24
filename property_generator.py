@@ -1,18 +1,15 @@
-import pandas as pd
+import sys
 from datetime import timezone, timedelta, datetime as dt
 import time
 
-import sys
-import os
-from Naked.toolshed.shell import execute_js, muterun_js
+import pandas as pd
+from arctic.date import DateRange
 
-from database_tools import *
+import database_tools as db
+from propertyGasPrice import PropertyGasPrice
+from propertyOpenPrice import PropertyOpenPrice
 
-from propertyGasPrice import *
-from propertyOpenPrice import *
-from property import *
-
-chunkStore = getChunkstore()
+chunkStore = db.getChunkstore()
 
 
 properties = [PropertyGasPrice(), PropertyOpenPrice()]
@@ -42,10 +39,10 @@ def generateProperties():
 			if debug: print("Got value", val, "for property", prop.name)
 			values[prop.name].append({'date': date, prop.name: val})
 
-	forEachTick(tickHandler, dbKeys['tick'], requirements)
+	forEachTick(tickHandler, db.dbKeys['tick'], requirements)
 
 	for prop in properties:
-		df = getDataFrame(values[prop.name])
+		df = db.getDataFrame(values[prop.name])
 		print("Saving prop " + prop.name+ " with values ", df)
 		#saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
 
@@ -53,9 +50,9 @@ def generateProperties():
 
 def forEachTick(callback, mainKey, dataKeys, t=1):
 	#get the time interval where we have all needed data
-	start = max([loadMetadata(chunkStore, key)['start'] for key in dbKeys.values()])
+	start = max([db.loadMetadata(chunkStore, key)['start'] for key in db.dbKeys.values()])
 
-	end = min([loadMetadata(chunkStore, key)['end'] for key in dbKeys.values()])
+	end = min([db.loadMetadata(chunkStore, key)['end'] for key in db.dbKeys.values()])
 
 	print("Starting generating properties from", start, "to", end)
 
@@ -67,9 +64,9 @@ def forEachTick(callback, mainKey, dataKeys, t=1):
 
 	iterators = {}
 
-	for key in dbKeys: #for each key (not value) that we store in the dbKeys
+	for key in db.dbKeys: #for each key (not value) that we store in the dbKeys
 		if dataKeys and key not in dataKeys: continue
-		iterators[key] = chunkStore.iterator(dbKeys[key], chunk_range=DateRange(start, end))
+		iterators[key] = chunkStore.iterator(db.dbKeys[key], chunk_range=DateRange(start, end))
 		print("Working with requested data", key)
 
 	data = {}#[next(iterators[i]) for i in range(len(iterators))]
@@ -110,7 +107,7 @@ def forEachTick(callback, mainKey, dataKeys, t=1):
 			callback(tickData, currentEnd)
 
 def loadDataForTick(lib, start, end):
-	return [loadData(lib, key, start, end, True) for key in dbKeys]
+	return [db.loadData(lib, key, start, end, True) for key in db.dbKeys]
 
 def subsetByDate(data, start, end):
 	"""Function that takes in a DataFrame and start and end dates, returning the subset of the frame with these dates"""
@@ -132,6 +129,6 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
 		elif arg == 'remove':
 			for prop in properties:
-				removeDB(chunkStore, prop.name)
+				db.removeDB(chunkStore, prop.name)
 		elif arg == 'generate':
 			generateProperties()

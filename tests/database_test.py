@@ -3,8 +3,8 @@ import pytest
 import sys, os
 sys.path.insert(0, os.path.realpath('./'))
 
-from database_tools import *
+import database_tools as db
 
 def test_connection():
-    lib = getChunkstore()
+    lib = db.getChunkstore()
     assert lib

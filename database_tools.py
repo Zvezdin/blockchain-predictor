@@ -1,13 +1,13 @@
 import sys
+from datetime import timezone, datetime as dt
+import time
 
+import pandas as pd
 from arctic import Arctic
 from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
-import pandas as pd
-from datetime import timezone, datetime as dt
-import time
 
 dbKeys = {'tick': 'test2', 'tx': 'tx', 'block': 'block'}
 
