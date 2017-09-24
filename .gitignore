@@ -10,3 +10,4 @@ sys
 time
 pd
 __pycache__/
+.cache/
