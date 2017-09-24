@@ -3,18 +3,7 @@ from property import Property
 class PropertyGasPrice(Property):
 	def __init__(self):
 		self.name = "gasPrice"
+		self.requires=['tx']
 
-	def processTick(self, block, tx, course):
-		index = tx.columns.searchsorted('gasPrice')
-
-		val = tx.values
-
-		avg = 0
-		for i in range(len(val)):
-			avg += int(val[i][index])
-		if avg == 0 or len(val) == 0:
-			print("Got no real data!")
-			print(tx) #debug
-		avg /= len(val)
-
-		return avg
+	def processTick(self, data):
+		return self.averageOfColumn(data[self.requires[0]], 'gasPrice')

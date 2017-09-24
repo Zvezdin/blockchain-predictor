@@ -9,12 +9,13 @@ from Naked.toolshed.shell import execute_js, muterun_js
 from database_tools import *
 
 from propertyGasPrice import *
+from propertyOpenPrice import *
 from property import *
 
 chunkStore = getChunkstore()
 
 
-properties = [PropertyGasPrice()]
+properties = [PropertyGasPrice(), PropertyOpenPrice()]
 propChunkSize = 'M'
 
 
@@ -26,8 +27,7 @@ def generateProperties():
 
 	def tickHandler(data, date):
 		for prop in properties:
-			block, tx, course = data
-			val = prop.processTick(block, tx, course)
+			val = prop.processTick(data)
 			print("Got value", val, "for property", prop.name)
 			values[prop.name].append({'date': date, prop.name: val})
 
@@ -58,9 +58,9 @@ def forEachTick(callback, mainKey, t=1):
 
 	iterators = {}
 
-	for key in dbKeys.values():
+	for key in dbKeys: #for each key (not value) that we store in the dbKeys
 		#if key == mainKey: continue
-		iterators[key] = chunkStore.iterator(key, chunk_range=DateRange(start, end))
+		iterators[key] = chunkStore.iterator(dbKeys[key], chunk_range=DateRange(start, end))
 
 	data = {}#[next(iterators[i]) for i in range(len(iterators))]
 
@@ -96,7 +96,7 @@ def forEachTick(callback, mainKey, t=1):
 				print(tickData[key].head(2))
 				print(tickData[key].tail(2))
 
-			callback([tickData[key] for key in tickData], currentEnd)
+			callback(tickData, currentEnd)
 
 def loadDataForTick(lib, start, end):
 	return [loadData(lib, key, start, end, True) for key in dbKeys]
