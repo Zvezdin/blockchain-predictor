@@ -135,7 +135,7 @@ def printHelp():
 	print("blockchain - downloads and saves / upgrades blockchain data in the db. Enter a start and an end block to download all blocks within that range.")
 	print("peek - shows the first and last rows of the db")
 	print("read - loads data in memory. Enter a db key to choose the data.")
-	print("upgrade - updates both blockchain and course db entries")
+	print("upgrade - updates both blockchain and course db entries (WIP)")
 
 i = 0
 while i < len(sys.argv):
@@ -143,14 +143,20 @@ while i < len(sys.argv):
 
 	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
 	elif arg == 'remove':
-		removeDB(dbKeys['tick'], storeKey)
-		removeDB(dbKeys['block'], storeKey)
-		removeDB(dbKeys['tx'], storeKey)
+		try:
+			removeDB(chunkStore, sys.argv[i+1])
+			i+=1
+		except:
+			print("There was an error while removing. Did you enter the correct key?")
+			break
 	elif arg == 'course': downloadCourse(dbKeys['tick'])
 	elif arg == 'peek':
-		peekData(chunkStore, dbKeys['block'])
-		peekData(chunkStore, dbKeys['tx'])
-		peekData(chunkStore, dbKeys['tick'])
+		try:
+			peekData(chunkStore, sys.argv[i+1])
+			i+=1
+		except:
+			print("There was an error while peeking. Did you enter the correct key?")
+			break
 	elif arg == 'read':
 		try:
 			readAllData(chunkStore, sys.argv[i+1])
@@ -158,7 +164,6 @@ while i < len(sys.argv):
 		except:
 			print("There was an error while reading. Did you enter the correct key?")
 			break
-	elif arg == 'upgrade': upgradeDB(dbKeys['tick'])
 	elif arg == 'blockchain':
 		try:
 			downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument

@@ -38,10 +38,10 @@ def getLibrary(lib):
 	except:
 		return None
 
-def removeDB(key, dataStore):
-	if db[dataStore].has_symbol(key):
-		db[dataStore].delete(key) #used for debugging
-		print("Removed database")
+def removeDB(lib, key):
+	if lib.has_symbol(key):
+		lib.delete(key) #used for debugging
+		print("Removed key "+key+" in database")
 
 
 def initLibrary(key, libType = None):
