@@ -5,6 +5,7 @@ class Property:
 
 	def __init__(self):
 		self.name = ""
+		self.requires = []
 
 	@abc.abstractmethod
 	def processTick(self, data):

@@ -18,22 +18,31 @@ chunkStore = getChunkstore()
 properties = [PropertyGasPrice(), PropertyOpenPrice()]
 propChunkSize = 'M'
 
+debug = False
+
 
 def generateProperties():
 	values = {} #a dict that holds an array of the returned values for each property
 
+	dub = {}
+
+	requirements = []
+
 	for prop in properties:
 		values[prop.name]= []
+		for req in prop.requires:
+			if not req in dub:
+				dub[req] = True
+				requirements.append(req)
+	print("Requirements are:", requirements)
 
 	def tickHandler(data, date):
 		for prop in properties:
 			val = prop.processTick(data)
-			print("Got value", val, "for property", prop.name)
+			if debug: print("Got value", val, "for property", prop.name)
 			values[prop.name].append({'date': date, prop.name: val})
 
-	print("working with keys", dbKeys)
-
-	forEachTick(tickHandler, dbKeys['tick'])
+	forEachTick(tickHandler, dbKeys['tick'], requirements)
 
 	for prop in properties:
 		df = getDataFrame(values[prop.name])
@@ -42,7 +51,7 @@ def generateProperties():
 
 
 
-def forEachTick(callback, mainKey, t=1):
+def forEachTick(callback, mainKey, dataKeys, t=1):
 	#get the time interval where we have all needed data
 	start = max([loadMetadata(chunkStore, key)['start'] for key in dbKeys.values()])
 
@@ -54,13 +63,14 @@ def forEachTick(callback, mainKey, t=1):
 
 	mainData = chunkStore.read(mainKey, chunk_range=DateRange(start, end))
 
-	print("Loaded mainData:", mainData)
+	if debug: print("Loaded mainData:", mainData)
 
 	iterators = {}
 
 	for key in dbKeys: #for each key (not value) that we store in the dbKeys
-		#if key == mainKey: continue
+		if dataKeys and key not in dataKeys: continue
 		iterators[key] = chunkStore.iterator(dbKeys[key], chunk_range=DateRange(start, end))
+		print("Working with requested data", key)
 
 	data = {}#[next(iterators[i]) for i in range(len(iterators))]
 
@@ -93,8 +103,9 @@ def forEachTick(callback, mainKey, t=1):
 					data[key] = next(iterators[key]) #load another data chunk and append it
 					newPart = subsetByDate(data[key], currentStart, currentEnd)
 					tickData[key] = pd.concat([tickData[key], newPart])
-				print(tickData[key].head(2))
-				print(tickData[key].tail(2))
+				if debug:
+					print(tickData[key].head(2))
+					print(tickData[key].tail(2))
 
 			callback(tickData, currentEnd)
 
