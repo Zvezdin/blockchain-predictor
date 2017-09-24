@@ -128,46 +128,24 @@ def getLatestBlock():
 	except:
 		return -1
 
-def printHelp():
-	print("Arguments:")
-	print("remove - removes the db")
-	print("course - downloads and saves / upgrades historical course in the db")
-	print("blockchain - downloads and saves / upgrades blockchain data in the db. Enter a start and an end block to download all blocks within that range.")
-	print("peek - shows the first and last rows of the db")
-	print("read - loads data in memory. Enter a db key to choose the data.")
-	print("upgrade - updates both blockchain and course db entries (WIP)")
+if __name__ == "__main__": #if this is the main file, parse the command args
+	def printHelp():
+		print("Module that downloads and stores blockchain and course data.")
+		print("Arguments:")
+		print("course - downloads and saves / upgrades historical course in the db")
+		print("blockchain - downloads and saves / upgrades blockchain data in the db. Enter a start and an end block to download all blocks within that range.")
+		print("upgrade - updates both blockchain and course db entries (WIP)")
 
-i = 0
-while i < len(sys.argv):
-	arg = sys.argv[i]
+	i = 0
+	while i < len(sys.argv):
+		arg = sys.argv[i]
 
-	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
-	elif arg == 'remove':
-		try:
-			removeDB(chunkStore, sys.argv[i+1])
-			i+=1
-		except:
-			print("There was an error while removing. Did you enter the correct key?")
-			break
-	elif arg == 'course': downloadCourse(dbKeys['tick'])
-	elif arg == 'peek':
-		try:
-			peekData(chunkStore, sys.argv[i+1])
-			i+=1
-		except:
-			print("There was an error while peeking. Did you enter the correct key?")
-			break
-	elif arg == 'read':
-		try:
-			readAllData(chunkStore, sys.argv[i+1])
-			i+=1
-		except:
-			print("There was an error while reading. Did you enter the correct key?")
-			break
-	elif arg == 'blockchain':
-		try:
-			downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument
-			i+=2
-		except:
-			downloadBlockchain() #if not, pass none
-	i+=1
+		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
+		elif arg == 'course': downloadCourse(dbKeys['tick'])
+		elif arg == 'blockchain':
+			try:
+				downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument
+				i+=2
+			except:
+				downloadBlockchain() #if not, pass none
+		i+=1

@@ -148,3 +148,39 @@ pd.set_option('expand_frame_repr', False)
 
 #Init the module
 init()
+
+if __name__ == "__main__": #if this is the main file, parse the command args
+	def printHelp():
+		print("Module that manages database storage and retrieval.")
+		print("Arguments:")
+		print("remove - removes a certain key")
+		print("peek - shows the first and last rows of a certain key")
+		print("read - loads a certain key in memory.")
+
+	i = 0
+	while i < len(sys.argv):
+		arg = sys.argv[i]
+
+		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
+		elif arg == 'remove':
+			try:
+				removeDB(getChunkstore(), sys.argv[i+1])
+				i+=1
+			except:
+				print("There was an error while removing. Did you enter the correct key?")
+				break
+		elif arg == 'peek':
+			try:
+				peekData(getChunkstore(), sys.argv[i+1])
+				i+=1
+			except:
+				print("There was an error while peeking. Did you enter the correct key?")
+				break
+		elif arg == 'read':
+			try:
+				readAllData(getChunkstore(), sys.argv[i+1])
+				i+=1
+			except:
+				print("There was an error while reading. Did you enter the correct key?")
+				break
+		i+=1

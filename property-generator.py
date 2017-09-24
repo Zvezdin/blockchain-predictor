@@ -120,16 +120,18 @@ def containsFullInterval(data, subset):
 	if len(subset) == 0: return False
 	return (data.iloc[0].date <= subset.iloc[0].date) and (data.iloc[len(data)-1].date >= subset.iloc[len(subset)-1].date)
 
-def printHelp():
-	print("Script that uses downloaded blockchain and course data to generate and save data properties.")
-	print("Arguments:")
-	print("remove : removes the database entries of generated properties.")
+if __name__ == "__main__": #if this is the main file, parse the command args
+	def printHelp():
+		print("Script that uses downloaded blockchain and course data to generate and save data properties.")
+		print("Arguments:")
+		print("generate: generates all available properties for all available data.")
+		print("remove : removes the database entries of generated properties.")
 
 
-for i, arg in enumerate(sys.argv):
-	if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
-	elif arg == 'remove':
-		for prop in properties:
-			removeDB(prop.name, storeKey)
-	elif arg == 'generate':
-		generateProperties()
+	for i, arg in enumerate(sys.argv):
+		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
+		elif arg == 'remove':
+			for prop in properties:
+				removeDB(chunkStore, prop.name)
+		elif arg == 'generate':
+			generateProperties()
