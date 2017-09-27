@@ -9,7 +9,7 @@ from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
 
-dbKeys = {'tick': 'test2', 'tx': 'tx', 'block': 'block'}
+dbKeys = {'tick': 'test2', 'tx': 'txAll', 'block': 'blockAll'}
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
@@ -18,6 +18,8 @@ courseChunkSize = 'M'
 storeKey = 'chunkstore'
 
 db = None
+
+maxDBStorage = 1024 #1024 GB max size of the database
 
 #Methods for db management
 
@@ -30,6 +32,7 @@ def getChunkstore():
 	if(chunkStore == None):
 		initLibrary(storeKey, CHUNK_STORE)
 		chunkStore = getLibrary(storeKey)
+		chunkStore._arctic_lib.set_quota(maxDBStorage * 1024 * 1024 * 1024)
 	return chunkStore
 
 def getLibrary(lib):
