@@ -1,6 +1,7 @@
 import sys
 from datetime import timezone, timedelta, datetime as dt
 import time
+import dateutil.parser
 
 import pandas as pd
 from arctic.date import DateRange
@@ -12,18 +13,28 @@ from propertyOpenPrice import PropertyOpenPrice
 chunkStore = db.getChunkstore()
 
 
-properties = [PropertyGasPrice(), PropertyOpenPrice()]
+globalProperties = [PropertyGasPrice(), PropertyOpenPrice()]
 propChunkSize = 'M'
 
 debug = False
 
 
-def generateProperties():
+def generateProperties(selectedProperties = None, start = None, end = None):
 	values = {} #a dict that holds an array of the returned values for each property
 
 	dub = {}
 
 	requirements = []
+
+	properties = []
+
+	if selectedProperties and len(selectedProperties) > 0:
+		for prop in globalProperties: #for every property that we have
+			if prop.name in selectedProperties: #if it is selected
+				properties.append(prop) #add it for generation
+	else: properties = globalProperties
+
+	print("Working with properties:", properties)
 
 	for prop in properties:
 		values[prop.name]= []
@@ -39,13 +50,12 @@ def generateProperties():
 			if debug: print("Got value", val, "for property", prop.name)
 			values[prop.name].append({'date': date, prop.name: val})
 
-	forEachTick(tickHandler, db.dbKeys['tick'], requirements)
-
-	print("Finished generating property data. Size of all property data is ", sys.getsizeof(values))
+	forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
 
 	for prop in properties:
 		df = db.getDataFrame(values[prop.name])
 		print("Saving prop " + prop.name+ " with values ", df)
+		print("With byte size:", sys.getsizeof(df))
 
 		try:
 			db.saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
@@ -54,11 +64,18 @@ def generateProperties():
 
 
 
-def forEachTick(callback, mainKey, dataKeys, t=1):
+def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 	#get the time interval where we have all needed data
-	start = max([db.loadMetadata(chunkStore, key)['start'] for key in db.dbKeys.values()])
+	startAll = max([db.loadMetadata(chunkStore, key)['start'] for key in db.dbKeys.values()])
 
-	end = min([db.loadMetadata(chunkStore, key)['end'] for key in db.dbKeys.values()])
+	endAll = min([db.loadMetadata(chunkStore, key)['end'] for key in db.dbKeys.values()])
+
+	if start: start = max(start, startAll) #make sure we don't go out of bounds
+	else: start = startAll
+
+	if end:
+		end = min(end, endAll)
+	else: end = endAll
 
 	print("Starting generating properties from", start, "to", end)
 
@@ -133,13 +150,27 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		print("Script that uses downloaded blockchain and course data to generate and save data properties.")
 		print("Arguments:")
 		print("generate: generates all available properties for all available data.")
+		print("---Arguments---")
+		print("")
 		print("remove : removes the database entries of generated properties.")
 
+	i = 0
+	while i < len(sys.argv):
+		arg = sys.argv[i]
 
-	for i, arg in enumerate(sys.argv):
 		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
 		elif arg == 'remove':
 			for prop in properties:
 				db.removeDB(chunkStore, prop.name)
 		elif arg == 'generate':
-			generateProperties()
+			try:
+				generateProperties(sys.argv[i+1].split(','), dateutil.parser.parse(sys.argv[i+2]), dateutil.parser.parse(sys.argv[i+3]))
+				i+=3
+			except:
+				try:
+					generateProperties(sys.argv[i+1].split(','))
+					i+=1
+				except:
+					generateProperties()
+
+		i+=1

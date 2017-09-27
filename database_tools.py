@@ -9,7 +9,7 @@ from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
 
-dbKeys = {'tick': 'test2', 'tx': 'txAll', 'block': 'blockAll'}
+dbKeys = {'tick': 'tickAll', 'tx': 'txAll', 'block': 'blockAll'}
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
@@ -32,6 +32,7 @@ def getChunkstore():
 	if(chunkStore == None):
 		initLibrary(storeKey, CHUNK_STORE)
 		chunkStore = getLibrary(storeKey)
+		#turn GB to bytes and set the max quota of storage. Arctic's default is 10GB
 		chunkStore._arctic_lib.set_quota(maxDBStorage * 1024 * 1024 * 1024)
 	return chunkStore
 

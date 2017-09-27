@@ -7,6 +7,9 @@ class Property:
 		self.name = ""
 		self.requires = []
 
+		self.requiresHistoricalData  = False
+		"""A flag that shows if the given property requires all available data for all date intervals to be sent to it. For example, if it does internal storage or calculations and previous processing of ticks has an effect on future processes."""
+
 	@abc.abstractmethod
 	def processTick(self, data):
 		"""Takes block, transaction and course data for an interval and returns the property's value"""
@@ -25,3 +28,6 @@ class Property:
 		else: avg /= len(val)
 
 		return avg
+	
+	def __str__(self):
+		return "Property "+self.name
