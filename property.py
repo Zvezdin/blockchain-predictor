@@ -22,7 +22,6 @@ class Property:
 			avg += float(val[i][index])
 		if avg == 0 or len(val) == 0:
 			print("Got no real data!")
-			print(df) #debug
-		avg /= len(val)
+		else: avg /= len(val)
 
 		return avg

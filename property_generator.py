@@ -41,10 +41,16 @@ def generateProperties():
 
 	forEachTick(tickHandler, db.dbKeys['tick'], requirements)
 
+	print("Finished generating property data. Size of all property data is ", sys.getsizeof(values))
+
 	for prop in properties:
 		df = db.getDataFrame(values[prop.name])
 		print("Saving prop " + prop.name+ " with values ", df)
-		#saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
+
+		try:
+			db.saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
+		except:
+			print("Failed saving property!", sys.exc_info()[0])
 
 
 
@@ -74,6 +80,8 @@ def forEachTick(callback, mainKey, dataKeys, t=1):
 	for key in iterators: # load the first chunks for all data
 		data[key] = next(iterators[key])
 
+	startTime = time.time()
+
 	for mainRow in mainData.iterrows():
 		rowData = mainRow[1]
 
@@ -94,9 +102,10 @@ def forEachTick(callback, mainKey, dataKeys, t=1):
 			for key in data:
 				tickData[key] = subsetByDate(data[key], currentStart, currentEnd)
 
-				#print(data[key], tickData[key])
-
-				while not containsFullInterval(data[key], tickData[key]):
+				while not containsFullInterval(data[key], tickData[key], currentEnd):
+					print("Loading new chunk for key" , key, tickData[key].head(2), tickData[key].tail(2), data[key].head(2), data[key].tail(2), currentStart, currentEnd)
+					print("Processing of the chunk took "+str(time.time() - startTime)+"s.")
+					startTime = time.time()
 					data[key] = next(iterators[key]) #load another data chunk and append it
 					newPart = subsetByDate(data[key], currentStart, currentEnd)
 					tickData[key] = pd.concat([tickData[key], newPart])
@@ -113,9 +122,11 @@ def subsetByDate(data, start, end):
 	"""Function that takes in a DataFrame and start and end dates, returning the subset of the frame with these dates"""
 	return data[(data.date > start) & (data.date <= end)]
 
-def containsFullInterval(data, subset):
-	if len(subset) == 0: return False
-	return (data.iloc[0].date <= subset.iloc[0].date) and (data.iloc[len(data)-1].date >= subset.iloc[len(subset)-1].date)
+def containsFullInterval(data, subset, end):
+	#if, for some reason, the subsetted data is empty, check only the intervals
+	if len(subset) == 0: return (data.iloc[len(data)-1].date >= end)
+	#check the real data
+	else: return (data.iloc[len(data)-1].date >= subset.iloc[len(subset)-1].date)
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	def printHelp():
