@@ -1,3 +1,7 @@
+#system-dependent shortcuts to launch geth/mongo
+geth.sh
+mongo.sh
+
 node_modules/
 log.txt
 data/
