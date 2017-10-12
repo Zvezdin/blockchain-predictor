@@ -19,7 +19,9 @@ chunkStore = db.getChunkstore()
 
 models = [MatrixModel()]
 
-def generateDataset(modelName, propertyNames, start=None, end=None):
+save = True
+
+def generateDataset(modelName, propertyNames, filename, start=None, end=None):
 	print("Generating dataset for properties ", propertyNames, "and using model", modelName, "for range", start, end)
 
 	model = None
@@ -27,13 +29,16 @@ def generateDataset(modelName, propertyNames, start=None, end=None):
 	#get the model instance
 	for mod in models:
 		if mod.name is modelName:
-			mod = model
+			model = mod
 
 	if model is None:
 		print("Error: Couldn't find model ", modelName)
 		return
 
 	properties = []
+
+	#make sure we don't go off bounds for any property
+	start, end = db.getMasterInterval(chunkStore, propertyNames, start, end)
 
 	#load the needed properties
 	for prop in propertyNames:
@@ -42,8 +47,13 @@ def generateDataset(modelName, propertyNames, start=None, end=None):
 	#feed the model the properties and let it generate
 	dataset = model.generate(properties)
 
-	#save the dataset to a file
-	pickle.dump(dataset, open('dataset'), protocol=pickle.HIGHEST_PROTOCOL)
+	if save:
+		#save the dataset to a file
+		try:
+			with open(filename, 'wb') as f:
+				pickle.dump(dataset, f, pickle.HIGHEST_PROTOCOL)
+		except Exception as e:
+			print('Unable to save data to', filename, ':', e)
 
 
 if __name__ == "__main__":
@@ -52,8 +62,12 @@ if __name__ == "__main__":
 	parser.add_argument('--properties', type=str, default='openPrice,gasPrice', help='A list of the names of the properties to use, separated by a comma.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
-	
+	parser.add_argument('--filename', type=str, default="data/dataset.pickle", help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
+
 	args, _ = parser.parse_known_args()
 	print(args)
 
-	generateDataset(args.model, args.properties.split(','), dateutil.parser.parse(args.start), dateutil.parser.parse(args.end))
+	start = dateutil.parser.parse(args.start) if args.start is not None else None
+	end = dateutil.parser.parse(args.end) if args.end is not None else None
+
+	generateDataset(args.model, args.properties.split(','), args.filename, start, end)
