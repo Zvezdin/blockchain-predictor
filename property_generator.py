@@ -66,16 +66,7 @@ def generateProperties(selectedProperties = None, start = None, end = None):
 
 def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 	#get the time interval where we have all needed data
-	startAll = max([db.loadMetadata(chunkStore, key)['start'] for key in db.dbKeys.values()])
-
-	endAll = min([db.loadMetadata(chunkStore, key)['end'] for key in db.dbKeys.values()])
-
-	if start: start = max(start, startAll) #make sure we don't go out of bounds
-	else: start = startAll
-
-	if end:
-		end = min(end, endAll)
-	else: end = endAll
+	start, end = db.getMasterInterval(chunkStore, db.dbKeys.values(), start, end)
 
 	print("Starting generating properties from", start, "to", end)
 

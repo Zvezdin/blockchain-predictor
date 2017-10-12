@@ -128,6 +128,20 @@ def loadData(lib, key, startDate, endDate, filter, interval = CLOSED_CLOSED):
 def loadMetadata(lib, key):
 	return lib.read_metadata(key)
 
+def getMasterInterval(lib, keys, start=None, end=None):
+	"""Checks the min/max dates for each key and returns the overlap. If start and end are given, returns the overlap with them as well."""
+	startAll = max([loadMetadata(lib, key)['start'] for key in keys])
+
+	endAll = min([loadMetadata(lib, key)['end'] for key in keys])
+
+	if start: start = max(start, startAll) #make sure we don't go out of bounds
+	else: start = startAll
+
+	if end:
+		end = min(end, endAll)
+	else: end = endAll
+
+	return (start, end)
 #reads all data in memory. Eats all the ram.
 def readAllData(lib, key):
 	start = time.time()
