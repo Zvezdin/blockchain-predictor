@@ -10,49 +10,43 @@ class MatrixModel(DatasetModel):
 		self.requires=[]
 
 	def generate(self, properties):
-		if not len(properties): return
+		if not properties: return
 
-		data = properties[0]
+		data = properties[0] #first property
 		for i in range(1, len(properties)):
-			data = pd.merge(data, properties[i])
-
-		print(data)
+			data = pd.merge(data, properties[i]) #merge all properties in one dataframe
 
 		allDates = data['date']
 
 		data.drop('date', axis=1, inplace=True)
 
-		print(properties, data)
+		print(data.head(5))
 		print()
-		print(data.values)
+		print(data.tail(5))
 
 		window_size = 3
 
 		vals = data.values
 
-		frames = np.ndarray([len(vals)-window_size, window_size, len(properties)])
+		frames = np.ndarray([len(vals)-window_size+1, window_size, len(properties)], dtype=np.float32)
 
 		dates = []
 		
 		#sliding window over the values. Step is 1.
 		for i in range(len(vals)):
 			#if we've reached the end
-			if i + window_size >= len(vals): break
+			if i + window_size > len(vals): break
 			
 			#create a frame using sliding window
 			frames[i] = vals[i:i+window_size]
 
-			dates.append(allDates.iloc[i+window_size])
+			dates.append(allDates.iloc[i+window_size-1])
 
-		print(frames, frames.shape)
+		print(frames[:3], frames.shape)
 
 		for x in range(len(properties)):
 			frames[:, :, x] = self.basic_normalization(frames[:, :, x])
 
-		#frames[:, :, 0] = (frames[:, :, 0] - np.mean(frames[:, :, 0])) / np.std(frames[:, :, 0])
-
-		print(frames, frames.shape)
-
-		print(dates)
+		print(frames[len(frames)-3:], frames.shape)
 
 		return (frames, dates)
