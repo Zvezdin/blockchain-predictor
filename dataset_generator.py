@@ -59,20 +59,27 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 	labels = generateLabels(dates, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
 
 	if len(dataset) != len(labels): #if we have a length mismatch, probably due to insufficient data for the last label
+		print("Mismatch in lengths of dataset and labels, removing excessive entries")
 		dataset = dataset[:len(labels)] #remove dataframes for which we have no labels
 
 	return (dataset, labels)
 
 def generateLabels(dates, ticks, labelsType):
+	"""Generates dataset labels for each passed date, getting data from ticks. dates MUST BE CHRONOLOGICALLY ORDERED. """
 	if labelsType == "boolean":
 		labels = []
+		i=0
+		
+		indices = ticks.index.values
+
 		for date in dates:
-			index = ticks.date[ticks.date == date].index
+			while ticks.get_value(indices[i], 'date') != date:
+				i+=1
 
 			try:
-				currPrice = ticks.get_value(index[0], 'closePrice')
-				nextPrice = ticks.get_value(index[0]+1, 'closePrice')
-			except KeyError:
+				currPrice = ticks.get_value(indices[i], 'closePrice')
+				nextPrice = ticks.get_value(indices[i+1], 'closePrice')
+			except (ValueError, IndexError, KeyError):
 				print("Failed to load the date after", date, ". Probably end of data. Will remove one dataset entry.")
 				break
 			if debug:
@@ -133,8 +140,14 @@ if __name__ == "__main__":
 	#generate the dataset
 	dataset, labels = generateDataset(args.model, args.properties.split(','), args.labels, start, end)
 
+	print("Generated dataset and labels with length %s." % labels.shape[0])
+
 	#randomize it
 	dataset, labels = randomizeDataset(dataset, labels)
 
+	print("Randomized dataset and labels.")
+
 	#save it
-	if save: saveDataset(args.filename, dataset, labels)
+	if save:
+		saveDataset(args.filename, dataset, labels)
+		print("saved dataset and labels as %a." % args.filename)
