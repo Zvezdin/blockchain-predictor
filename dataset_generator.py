@@ -20,11 +20,12 @@ chunkStore = db.getChunkstore()
 
 models = [MatrixModel()]
 
-save = False
+save = True
+debug = False
 
 labelKey = 'closePrice'
 
-def generateDataset(modelName, propertyNames, filename, labelsType, start=None, end=None):
+def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 	print("Generating dataset for properties ", propertyNames, "and using model", modelName, "for range", start, end)
 
 	model = None
@@ -47,46 +48,43 @@ def generateDataset(modelName, propertyNames, filename, labelsType, start=None, 
 	for prop in propertyNames:
 		properties.append(db.loadData(chunkStore, prop, start, end, True))
 
-	for i, prop in enumerate(properties):
-		if len(properties[i]) != len(prop):
+	for prop in properties:
+		if len(properties[0]) != len(prop):
 			print("Error: Length mismatch in the data properties.")
 			return
 
 	#feed the model the properties and let it generate
-	dataset, nextDates =  model.generate(properties)
+	dataset, dates =  model.generate(properties)
 
-	labels = generateLabels(nextDates, db.loadData(chunkStore, labelKey, start, end, True), labelsType)
+	labels = generateLabels(dates, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
+
+	if len(dataset) != len(labels): #if we have a length mismatch, probably due to insufficient data for the last label
+		dataset = dataset[:len(labels)] #remove dataframes for which we have no labels
 
 	return (dataset, labels)
 
 def generateLabels(dates, ticks, labelsType):
-	#todo
-	print(dates, ticks)
-
-	#create a dataframe from the dates
-
 	if labelsType == "boolean":
 		labels = []
 		for date in dates:
-			selection = ticks.loc[ticks['date'] < date]
-			currDate = selection.iloc[len(selection)-1]
-			nextDate = ticks.loc[ticks['date'] == date]
-			currPrice = currDate['closePrice']
-			nextPrice = nextDate['closePrice']
+			index = ticks.date[ticks.date == date].index
 
-			print(currPrice, nextPrice, type(nextPrice))
-
-			print()
-			print()
+			try:
+				currPrice = ticks.get_value(index[0], 'closePrice')
+				nextPrice = ticks.get_value(index[0]+1, 'closePrice')
+			except KeyError:
+				print("Failed to load the date after", date, ". Probably end of data. Will remove one dataset entry.")
+				break
+			if debug:
+				print(selection[0:2])
 
 			sign = nextPrice > currPrice
-			print(sign)
+			if debug:
+				print("Label for dataframe at ", date, "is", sign)
 			labels.append(sign)
 
-		#labels = np.array(labels)
-		print(dates)
-		print(labels)
-		print(ticks)
+		#make numpy array
+		labels = np.array(labels)
 		return labels
 
 	elif labelsType == "full":
@@ -97,6 +95,12 @@ def generateLabels(dates, ticks, labelsType):
 
 		print(labels)
 		return labels
+
+def randomizeDataset(dataset, labels):
+	permutation = np.random.permutation(labels.shape[0])
+	shuffled_dataset = dataset[permutation,:,:]
+	shuffled_labels = labels[permutation]
+	return shuffled_dataset, shuffled_labels
 
 def saveDataset(filename, dataset, labels):
 	if save:
@@ -126,6 +130,11 @@ if __name__ == "__main__":
 	start = dateutil.parser.parse(args.start) if args.start is not None else None
 	end = dateutil.parser.parse(args.end) if args.end is not None else None
 
-	dataset, labels = generateDataset(args.model, args.properties.split(','), args.filename, args.labels, start, end)
+	#generate the dataset
+	dataset, labels = generateDataset(args.model, args.properties.split(','), args.labels, start, end)
 
-	if save: saveDataset(dataset, labels)
+	#randomize it
+	dataset, labels = randomizeDataset(dataset, labels)
+
+	#save it
+	if save: saveDataset(args.filename, dataset, labels)
