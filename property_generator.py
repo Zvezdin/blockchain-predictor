@@ -152,7 +152,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
 		elif arg == 'remove':
-			for prop in properties:
+			for prop in globalProperties:
 				db.removeDB(chunkStore, prop.name)
 		elif arg == 'generate':
 			try:
