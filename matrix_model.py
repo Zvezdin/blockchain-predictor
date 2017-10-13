@@ -18,6 +18,8 @@ class MatrixModel(DatasetModel):
 
 		print(data)
 
+		allDates = data['date']
+
 		data.drop('date', axis=1, inplace=True)
 
 		print(properties, data)
@@ -28,15 +30,19 @@ class MatrixModel(DatasetModel):
 
 		vals = data.values
 
-		frames = np.ndarray([len(vals)-window_size+1, window_size, len(properties)])
+		frames = np.ndarray([len(vals)-window_size, window_size, len(properties)])
 
+		dates = []
+		
 		#sliding window over the values. Step is 1.
 		for i in range(len(vals)):
 			#if we've reached the end
-			if i + window_size > len(vals): break
+			if i + window_size >= len(vals): break
 			
 			#create a frame using sliding window
 			frames[i] = vals[i:i+window_size]
+
+			dates.append(allDates.iloc[i+window_size])
 
 		print(frames, frames.shape)
 
@@ -47,4 +53,6 @@ class MatrixModel(DatasetModel):
 
 		print(frames, frames.shape)
 
-		return frames
+		print(dates)
+
+		return (frames, dates)
