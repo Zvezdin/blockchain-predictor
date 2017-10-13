@@ -9,11 +9,12 @@ from arctic.date import DateRange
 import database_tools as db
 from propertyGasPrice import PropertyGasPrice
 from propertyOpenPrice import PropertyOpenPrice
+from propertyClosePrice import PropertyClosePrice
 
 chunkStore = db.getChunkstore()
 
 
-globalProperties = [PropertyGasPrice(), PropertyOpenPrice()]
+globalProperties = [PropertyGasPrice(), PropertyOpenPrice(), PropertyClosePrice()]
 propChunkSize = 'M'
 
 debug = False
