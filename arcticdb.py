@@ -4,6 +4,7 @@ from datetime import timezone, datetime as dt
 import time
 import pickle
 import json
+from time import sleep
 
 import pandas as pd
 from Naked.toolshed.shell import execute_js, muterun_js
@@ -93,6 +94,8 @@ def downloadBlockchain(start = 0, targetBlock = None):
 			if(attempts > attemptsThreshold):
 				print("Too many failed attempts, aborting operation.")
 				return
+
+			sleep(30 * attempts) #delay before retrying. Most issues are solved that way.
 			continue
 
 		attempts = 0
