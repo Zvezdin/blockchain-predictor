@@ -7,7 +7,7 @@ import argparse
 import pickle
 
 import pandas as pd
-from arctic.date import DateRange
+from arctic.date import CLOSED_OPEN
 import numpy as np
 
 sys.path.insert(0, os.path.realpath('dataset_models'))
@@ -48,7 +48,7 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 
 	#load the needed properties
 	for prop in propertyNames:
-		properties.append(db.loadData(chunkStore, prop, start, end, True))
+		properties.append(db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN))
 
 	for prop in properties:
 		if len(properties[0]) != len(prop):
@@ -58,13 +58,13 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 	#feed the model the properties and let it generate
 	dataset, dates =  model.generate(properties)
 
-	labels = generateLabels(dates, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
+	labels, dates = generateLabels(dates, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
 
 	if len(dataset) != len(labels): #if we have a length mismatch, probably due to insufficient data for the last label
 		print("Mismatch in lengths of dataset and labels, removing excessive entries")
 		dataset = dataset[:len(labels)] #remove dataframes for which we have no labels
 
-	return (dataset, labels)
+	return (dataset, labels, dates)
 
 def generateLabels(dates, ticks, labelsType):
 	"""Generates dataset labels for each passed date, getting data from ticks. dates MUST BE CHRONOLOGICALLY ORDERED. """
@@ -83,6 +83,7 @@ def generateLabels(dates, ticks, labelsType):
 				nextPrice = ticks.get_value(indices[i+1], 'closePrice')
 			except (ValueError, IndexError, KeyError):
 				print("Failed to load the date after", date, ". Probably end of data. Will remove one dataset entry.")
+				dates = dates[:len(labels)] #keep only the labeled dates
 				break
 			if debug:
 				print(selection[0:2])
@@ -94,7 +95,7 @@ def generateLabels(dates, ticks, labelsType):
 
 		#make numpy array
 		labels = np.array(labels)
-		return labels
+		return (labels, dates)
 
 	elif labelsType == "full":
 		dates = pd.DataFrame({'date': dates})
@@ -105,24 +106,45 @@ def generateLabels(dates, ticks, labelsType):
 		print(labels)
 		return labels
 
-def randomizeDataset(dataset, labels):
+def randomizeDataset(dataset, labels, dates):
 	permutation = np.random.permutation(labels.shape[0])
 	shuffled_dataset = dataset[permutation,:,:]
 	shuffled_labels = labels[permutation]
-	return shuffled_dataset, shuffled_labels
+	shuffled_dates = dates[permutation]
+	return shuffled_dataset, shuffled_labels, shuffled_dates
 
-def saveDataset(filename, dataset, labels):
+def saveDataset(filename, dataset, labels, dates):
 	if save:
 		#save the dataset to a file
 		data = {
 			'dataset': dataset,
-			'labels': labels
+			'labels': labels,
+			'dates': dates
 		}
 		try:
 			with open(filename, 'wb') as f:
 				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 		except Exception as e:
 			print('Unable to save data to', filename, ':', e)
+
+def run(model, properties, start, end, filename, labels, shuffle):
+	start = dateutil.parser.parse(start) if start is not None else None
+	end = dateutil.parser.parse(end) if end is not None else None
+
+	#generate the dataset
+	dataset, labels, dates = generateDataset(model, properties.split(','), labels, start, end)
+
+	print("Generated dataset and labels with length %s." % labels.shape[0])
+
+	if shuffle:
+		#randomize it
+		dataset, labels, dates = randomizeDataset(dataset, labels, dates)
+		print("Randomized dataset and labels.")
+
+	#save it
+	if save:
+		saveDataset(filename, dataset, labels, dates)
+		print("saved dataset and labels as %a." % filename)
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Generates a dataset by compiling generated data properties using a certain dataset model")
@@ -132,24 +154,9 @@ if __name__ == "__main__":
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--filename', type=str, default="data/dataset.pickle", help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
 	parser.add_argument('--labels', type=str, default='boolean', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
+	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don shuffle the generated dataset and labels.")
+	parser.set_defaults(shuffle=True)
 
 	args, _ = parser.parse_known_args()
-	print(args)
 
-	start = dateutil.parser.parse(args.start) if args.start is not None else None
-	end = dateutil.parser.parse(args.end) if args.end is not None else None
-
-	#generate the dataset
-	dataset, labels = generateDataset(args.model, args.properties.split(','), args.labels, start, end)
-
-	print("Generated dataset and labels with length %s." % labels.shape[0])
-
-	#randomize it
-	dataset, labels = randomizeDataset(dataset, labels)
-
-	print("Randomized dataset and labels.")
-
-	#save it
-	if save:
-		saveDataset(args.filename, dataset, labels)
-		print("saved dataset and labels as %a." % args.filename)
+	run(args.model, args.properties, args.start, args.end, args.filename, args.labels, args.shuffle)

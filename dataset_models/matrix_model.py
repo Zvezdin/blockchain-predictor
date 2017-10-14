@@ -49,4 +49,6 @@ class MatrixModel(DatasetModel):
 
 		print(frames[len(frames)-3:], frames.shape)
 
+		dates = np.array(dates) #convert to numpy array
+
 		return (frames, dates)
