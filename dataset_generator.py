@@ -23,7 +23,7 @@ chunkStore = db.getChunkstore()
 models = [MatrixModel()]
 
 save = True
-debug = False
+debug = True
 
 labelKey = 'closePrice'
 
@@ -86,11 +86,11 @@ def generateLabels(dates, ticks, labelsType):
 				dates = dates[:len(labels)] #keep only the labeled dates
 				break
 			if debug:
-				print(selection[0:2])
+				print(ticks.loc[indices[i] : indices[i+1]])
 
 			sign = nextPrice > currPrice
 			if debug:
-				print("Label for dataframe at ", date, "is", sign)
+				print("Label for dataframe at %s is %s for prices curr/next : %s and %s" % (date, sign, currPrice, nextPrice) )
 			labels.append(sign)
 
 		#make numpy array
