@@ -1,4 +1,5 @@
 import sys
+import os
 from datetime import timezone, timedelta, datetime as dt
 import time
 import dateutil.parser
@@ -7,6 +8,9 @@ import pandas as pd
 from arctic.date import DateRange
 
 import database_tools as db
+
+#include the properties from their respectible folder
+sys.path.insert(0, os.path.realpath('properties'))
 from propertyGasPrice import PropertyGasPrice
 from propertyOpenPrice import PropertyOpenPrice
 from propertyClosePrice import PropertyClosePrice

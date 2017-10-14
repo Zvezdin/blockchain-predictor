@@ -1,4 +1,5 @@
 import sys
+import os
 from datetime import timezone, timedelta, datetime as dt
 import time
 import dateutil.parser
@@ -9,6 +10,7 @@ import pandas as pd
 from arctic.date import DateRange
 import numpy as np
 
+sys.path.insert(0, os.path.realpath('dataset_models'))
 from dataset_model import DatasetModel
 
 from matrix_model import MatrixModel
