@@ -8,8 +8,9 @@ from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
+masterKey="_all"
 
-dbKeys = {'tick': 'tickAll', 'tx': 'txAll', 'block': 'blockAll'}
+dbKeys = {'tick': '', 'tx': '', 'block': ''}
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
@@ -21,11 +22,16 @@ db = None
 
 maxDBStorage = 1024 #1024 GB max size of the database
 
+def updateKeys(masterKey):
+	for key in dbKeys:
+		dbKeys[key] = key+masterKey
+
 #Methods for db management
 
 def init():
 	global db
 	db = Arctic('localhost')
+	updateKeys(masterKey)
 
 def getChunkstore():
 	chunkStore = getLibrary(storeKey)
