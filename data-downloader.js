@@ -12,7 +12,7 @@ var debug = true;
 
 var datadir = 'data/'
 
-const maxAsyncRequests = 1;
+const maxAsyncRequests = 10;
 
 var requestedBlocks = 0;
 

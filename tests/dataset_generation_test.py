@@ -16,8 +16,8 @@ def test_labels():
 
 	filename = "data/dataset_test.pickle"
 
-	start = "2016-10-30-02"
-	end = "2016-10-30-04"
+	start = None
+	end = None
 
 	#generate a sample dataset
 	ds.run("matrix", "openPrice,closePrice,gasPrice", start, end, filename, "boolean", False)
