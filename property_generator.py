@@ -1,5 +1,6 @@
 import sys
 import os
+import importlib
 from datetime import timezone, timedelta, datetime as dt
 import time
 import dateutil.parser
@@ -12,14 +13,24 @@ import database_tools as db
 
 #include the properties from their respectible folder
 sys.path.insert(0, os.path.realpath('properties'))
-from propertyGasPrice import PropertyGasPrice
-from propertyOpenPrice import PropertyOpenPrice
+
+from property import Property
+from propertyBlockDifficulty import PropertyBlockDifficulty
+from propertyBlockSize import PropertyBlockSize
 from propertyClosePrice import PropertyClosePrice
+from propertyGasLimit import PropertyGasLimit
+from propertyGasPrice import PropertyGasPrice
+from propertyGasUsed import PropertyGasUsed
+from propertyNetworkHashrate import PropertyNetworkHashrate
+from propertyOpenPrice import PropertyOpenPrice
+from propertyTransactionCount import PropertyTransactionCount
 
 chunkStore = db.getChunkstore()
 
 
-globalProperties = [PropertyGasPrice(), PropertyOpenPrice(), PropertyClosePrice()]
+globalProperties = [PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
+PropertyGasUsed(), PropertyNetworkHashrate(), PropertyOpenPrice(), PropertyTransactionCount()]
+
 propChunkSize = 'M'
 
 debug = False
@@ -144,8 +155,8 @@ def containsFullInterval(data, subset, end):
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	parser = argparse.ArgumentParser(description="Script that uses downloaded blockchain and course data to generate and save data properties")
-	parser.add_argument('--action', type=str, default='generate', choices=['generate', 'remove'], help='Whether to generate properties or to remove already generated ones.')
-	parser.add_argument('--properties', type=str, default='openPrice,closePrice,gasPrice', help='A list of the names of the properties to generate, separated by a comma.')
+	parser.add_argument('--action', type=str, default=None, choices=['generate', 'remove'], help='Whether to generate properties or to remove already generated ones.')
+	parser.add_argument('--properties', type=str, default=None, help='A list of the names of the properties to generate, separated by a comma.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 
@@ -154,7 +165,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	start = dateutil.parser.parse(args.start) if args.start is not None else None
 	end = dateutil.parser.parse(args.end) if args.end is not None else None
 
-	properties = args.properties.split(',')
+	properties = args.properties.split(',') if args.properties != None  else None
 
 	if args.action == 'generate':
 		generateProperties(properties, start, end)
