@@ -113,23 +113,24 @@ def randomizeDataset(dataset, labels, dates):
 	shuffled_dates = dates[permutation]
 	return shuffled_dataset, shuffled_labels, shuffled_dates
 
-def saveDataset(filename, dataset, labels, dates):
+def saveDataset(filename, data):
 	if save:
 		#save the dataset to a file
-		data = {
-			'dataset': dataset,
-			'labels': labels,
-			'dates': dates
-		}
 		try:
 			with open(filename, 'wb') as f:
 				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 		except Exception as e:
 			print('Unable to save data to', filename, ':', e)
 
-def run(model, properties, start, end, filename, labels, shuffle):
+def run(model, properties, start, end, filename, labels, ratio, shuffle):
 	start = dateutil.parser.parse(start) if start is not None else None
 	end = dateutil.parser.parse(end) if end is not None else None
+
+	try:
+		ratio = [int(x) for x in ratio.split(':')]
+	except ValueError:
+		print("Error while reading the given ratio. Did you format it in the correct way?")
+		return
 
 	#generate the dataset
 	dataset, labels, dates = generateDataset(model, properties.split(','), labels, start, end)
@@ -141,9 +142,36 @@ def run(model, properties, start, end, filename, labels, shuffle):
 		dataset, labels, dates = randomizeDataset(dataset, labels, dates)
 		print("Randomized dataset and labels.")
 
+	if len(ratio) == 1:
+		data = {
+			'dataset': dataset,
+			'labels': labels,
+			'dates': dates
+		}
+	else:
+		data = []
+
+		split = [] #the lenghts of the dataset pieces
+		for rat in ratio:
+			split.append( int((rat * len(dataset)) / np.sum(ratio)) ) #calculate the length by keeping the given ratio
+
+		print(split, ratio)
+
+		index = 0
+
+		for i, spl in enumerate(split):
+			end = (spl + index) if i != len(split) -1 else None #because of integer division, add anything left on the last iteration
+
+			data.append({
+				'dataset': dataset[index:end],
+				'labels': labels[index:end],
+				'dates': dates[index:end]
+			})
+			index += spl
+
 	#save it
 	if save:
-		saveDataset(filename, dataset, labels, dates)
+		saveDataset(filename, data)
 		print("saved dataset and labels as %a." % filename)
 
 if __name__ == "__main__":
@@ -154,6 +182,7 @@ if __name__ == "__main__":
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--filename', type=str, default=None, help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
 	parser.add_argument('--labels', type=str, default='boolean', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
+	parser.add_argument('--ratio', type=str, default='1', help='On how many fragments to split the main dataset. For example, "1:2:3" will create three datasets with sizes proportional to what given.')
 	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don't shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=True)
 
@@ -163,4 +192,4 @@ if __name__ == "__main__":
 		filename = "data/dataset_" + str(args.start) + "-" + str(args.end) + ".pickle"
 	else: filename = args.filename
 
-	run(args.model, args.properties, args.start, args.end, filename, args.labels, args.shuffle)
+	run(args.model, args.properties, args.start, args.end, filename, args.labels, args.ratio, args.shuffle)
