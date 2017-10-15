@@ -1,6 +1,7 @@
 import sys
 from datetime import timezone, datetime as dt
 import time
+import argparse
 
 import pandas as pd
 from arctic import Arctic
@@ -174,37 +175,35 @@ pd.set_option('expand_frame_repr', False)
 init()
 
 if __name__ == "__main__": #if this is the main file, parse the command args
-	def printHelp():
-		print("Module that manages database storage and retrieval.")
-		print("Arguments:")
-		print("remove - removes a certain key")
-		print("peek - shows the first and last rows of a certain key")
-		print("read - loads a certain key in memory.")
+	parser = argparse.ArgumentParser(description="Module that manages database storage and retrieval.")
+	parser.add_argument('--key', type=str, help='The database symbol.')
+	parser.add_argument('--list', dest='list', action="store_true", help="Print the available symbols in the database.")
+	parser.add_argument('--peek', dest='peek', action="store_true", help="Print the first and last rows of a symbol.")
+	parser.add_argument('--read', dest='read', action="store_true", help="Load and print the whole symbol.")
+	parser.add_argument('--remove', dest='remove', action="store_true", help="Remove a certain symbol from the database.")
+	parser.set_defaults(list=False)
+	parser.set_defaults(peek=False)
+	parser.set_defaults(read=False)
+	parser.set_defaults(remove=False)
 
-	i = 0
-	while i < len(sys.argv):
-		arg = sys.argv[i]
 
-		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
-		elif arg == 'remove':
+	args, _ = parser.parse_known_args()
+
+	if args.key == None or args.list:
+		print("Available symbols: ", getChunkstore().list_symbols())
+	else:
+		if args.peek:
 			try:
-				removeDB(getChunkstore(), sys.argv[i+1])
-				i+=1
-			except:
-				print("There was an error while removing. Did you enter the correct key?")
-				break
-		elif arg == 'peek':
-			try:
-				peekData(getChunkstore(), sys.argv[i+1])
-				i+=1
+				peekData(getChunkstore(), args.key)
 			except:
 				print("There was an error while peeking. Did you enter the correct key?")
-				break
-		elif arg == 'read':
+		if args.read:
 			try:
-				readAllData(getChunkstore(), sys.argv[i+1])
-				i+=1
+				readAllData(getChunkstore(), args.key)
 			except:
 				print("There was an error while reading. Did you enter the correct key?")
-				break
-		i+=1
+		if args.remove:
+			try:
+				removeDB(getChunkstore(), args.key)
+			except:
+				print("There was an error while removing. Did you enter the correct key?")

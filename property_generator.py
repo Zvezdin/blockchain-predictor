@@ -3,6 +3,7 @@ import os
 from datetime import timezone, timedelta, datetime as dt
 import time
 import dateutil.parser
+import argparse
 
 import pandas as pd
 from arctic.date import DateRange
@@ -142,31 +143,21 @@ def containsFullInterval(data, subset, end):
 	else: return (data.iloc[len(data)-1].date >= subset.iloc[len(subset)-1].date)
 
 if __name__ == "__main__": #if this is the main file, parse the command args
-	def printHelp():
-		print("Script that uses downloaded blockchain and course data to generate and save data properties.")
-		print("Arguments:")
-		print("generate: generates all available properties for all available data.")
-		print("---Arguments---")
-		print("")
-		print("remove : removes the database entries of generated properties.")
+	parser = argparse.ArgumentParser(description="Script that uses downloaded blockchain and course data to generate and save data properties")
+	parser.add_argument('--action', type=str, default='generate', choices=['generate', 'remove'], help='Whether to generate properties or to remove already generated ones.')
+	parser.add_argument('--properties', type=str, default='openPrice,closePrice,gasPrice', help='A list of the names of the properties to generate, separated by a comma.')
+	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
+	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 
-	i = 0
-	while i < len(sys.argv):
-		arg = sys.argv[i]
+	args, _ = parser.parse_known_args()
 
-		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp()
-		elif arg == 'remove':
-			for prop in globalProperties:
-				db.removeDB(chunkStore, prop.name)
-		elif arg == 'generate':
-			try:
-				generateProperties(sys.argv[i+1].split(','), dateutil.parser.parse(sys.argv[i+2]), dateutil.parser.parse(sys.argv[i+3]))
-				i+=3
-			except:
-				try:
-					generateProperties(sys.argv[i+1].split(','))
-					i+=1
-				except:
-					generateProperties()
+	start = dateutil.parser.parse(args.start) if args.start is not None else None
+	end = dateutil.parser.parse(args.end) if args.end is not None else None
 
-		i+=1
+	properties = args.properties.split(',')
+
+	if args.action == 'generate':
+		generateProperties(properties, start, end)
+	elif args.action == 'remove':
+		for prop in properties:
+			db.removeDB(chunkStore, prop)

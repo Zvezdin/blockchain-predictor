@@ -5,6 +5,7 @@ import time
 import pickle
 import json
 from time import sleep
+import argparse
 
 import pandas as pd
 from Naked.toolshed.shell import execute_js, muterun_js
@@ -130,23 +131,16 @@ def getLatestBlock():
 		return -1
 
 if __name__ == "__main__": #if this is the main file, parse the command args
-	def printHelp():
-		print("Module that downloads and stores blockchain and course data.")
-		print("Arguments:")
-		print("course - downloads and saves / upgrades historical course in the db")
-		print("blockchain - downloads and saves / upgrades blockchain data in the db. Enter a start and an end block to download all blocks within that range.")
-		print("upgrade - updates both blockchain and course db entries (WIP)")
+	parser = argparse.ArgumentParser(description="Module that downloads and stores blockchain and course data.")
+	parser.add_argument('--course', dest='course', action="store_true", help="Downloads and saves or upgrades historical course data.")
+	parser.add_argument('--blockchain', dest='blockchain', action="store_true", help="Downloads and saves or upgrades blockchain data.")
+	parser.add_argument('--start', type=int, default=None, help='From which block to start downloading.')
+	parser.add_argument('--end', type=int, default=None, help='Until which block to download.')
+	parser.set_defaults(course=False)
+	parser.set_defaults(blockchain=False)
 
-	i = 0
-	while i < len(sys.argv):
-		arg = sys.argv[i]
+	args, _ = parser.parse_known_args()
 
-		if arg.find('help') >= 0 or len(sys.argv) == 1: printHelp() #if there are no given arguments or the user has entered 'help'
-		elif arg == 'course': downloadCourse(db.dbKeys['tick'])
-		elif arg == 'blockchain':
-			try:
-				downloadBlockchain(int(sys.argv[i+1]), int(sys.argv[i+2])) #Try to see if the user gave an argument
-				i+=2
-			except:
-				downloadBlockchain() #if not, pass none
-		i+=1
+	if args.course: downloadCourse(db.dbKeys['tick'])
+	if args.blockchain:
+		downloadBlockchain(args.start, args.end)
