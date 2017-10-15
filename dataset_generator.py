@@ -149,14 +149,18 @@ def run(model, properties, start, end, filename, labels, shuffle):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Generates a dataset by compiling generated data properties using a certain dataset model")
 	parser.add_argument('--model', type=str, default='matrix', help='The name of the dataset model to use. Defaults to matrix.')
-	parser.add_argument('--properties', type=str, default='openPrice,closePrice,gasPrice', help='A list of the names of the properties to use, separated by a comma.')
+	parser.add_argument('properties', type=str, default='openPrice,closePrice,gasPrice', help='A list of the names of the properties to use, separated by a comma.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
-	parser.add_argument('--filename', type=str, default="data/dataset.pickle", help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
+	parser.add_argument('--filename', type=str, default=None, help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
 	parser.add_argument('--labels', type=str, default='boolean', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
 	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don't shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=True)
 
 	args, _ = parser.parse_known_args()
 
-	run(args.model, args.properties, args.start, args.end, args.filename, args.labels, args.shuffle)
+	if args.filename == None:
+		filename = "data/dataset_" + str(args.start) + "-" + str(args.end) + ".pickle"
+	else: filename = args.filename
+
+	run(args.model, args.properties, args.start, args.end, filename, args.labels, args.shuffle)

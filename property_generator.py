@@ -119,7 +119,7 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 			currentEnd = rowData.date
 			lastEnd = currentEnd
 
-			print("Loading data for dates", currentStart, currentEnd)
+			#print("Loading data for dates", currentStart, currentEnd)
 
 			#load the needed data
 
@@ -159,6 +159,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--properties', type=str, default=None, help='A list of the names of the properties to generate, separated by a comma.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
+	parser.add_argument('--list', dest='list', action="store_true", help="List the available properties that can be generated.")
+	parser.set_defaults(list=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -172,3 +174,5 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	elif args.action == 'remove':
 		for prop in properties:
 			db.removeDB(chunkStore, prop)
+	elif args.action == None or args.list:
+		print("Available properties:", [prop.name for prop in globalProperties])
