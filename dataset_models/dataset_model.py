@@ -2,7 +2,7 @@ import abc
 
 import numpy as np
 
-class DatasetModel:
+class DatasetModel(abc.ABC):
 	"""An abstract class that is inherited by all dataset models."""
 
 	def __init__(self):

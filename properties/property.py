@@ -1,6 +1,6 @@
 import abc
 
-class Property:
+class Property(abc.ABC):
 	"""A property class with a unified interface on the different data properties and their generation"""
 
 	def __init__(self):
