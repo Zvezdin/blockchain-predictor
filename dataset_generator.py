@@ -23,7 +23,7 @@ chunkStore = db.getChunkstore()
 models = [MatrixModel()]
 
 save = True
-debug = True
+debug = False
 
 labelKey = 'closePrice'
 
@@ -154,7 +154,7 @@ if __name__ == "__main__":
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--filename', type=str, default="data/dataset.pickle", help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
 	parser.add_argument('--labels', type=str, default='boolean', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
-	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don shuffle the generated dataset and labels.")
+	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don't shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=True)
 
 	args, _ = parser.parse_known_args()

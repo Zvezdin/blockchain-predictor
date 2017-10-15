@@ -2,7 +2,7 @@ from property import Property
 
 class PropertyNetworkHashrate(Property):
 	def __init__(self):
-		self.name = "blockDifficulty"
+		self.name = "networkHashrate"
 		self.requires = ['block']
 
 	def processTick(self, data):
