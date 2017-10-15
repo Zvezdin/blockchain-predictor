@@ -70,17 +70,17 @@ Saving files as simple ```.json``` files isn't very useful, scalable and optimal
 
 To download and save historical course data in the database, run:
 ```bash
-python3 arcticdb.py course
+python3 arcticdb.py --course
 ```
 
 To download, process and save blockchain data in the database, run:
 ```bash
-python3 arcticdb.py blockchain
+python3 arcticdb.py --blockchain
 ```
 
 For more info:
 ```bash
-python3 arcticdb.py help
+python3 arcticdb.py -h
 ```
 
 ### Generation of data properties
@@ -89,12 +89,12 @@ Data properties are calculated from the raw data. They are features which can re
 
 To generate all of the available properties for all downloaded data, run the following command:
 ```bash
-python3 property-generator.py generate
+python3 property-generator.py --action generate
 ```
 
 For more info:
 ```bash
-python3 property-generator.py help
+python3 property-generator.py -h
 ```
 
 ### Generation of a dataset
