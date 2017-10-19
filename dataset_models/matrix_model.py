@@ -9,7 +9,7 @@ class MatrixModel(DatasetModel):
 		self.name="matrix"
 		self.requires=[]
 
-	def generate(self, properties):
+	def generate(self, properties, args = {'window': 100, 'regularization': True}):
 		if not properties: return
 
 		data = properties[0] #first property
@@ -24,7 +24,10 @@ class MatrixModel(DatasetModel):
 		print()
 		print(data.tail(5))
 
-		window_size = 3
+		window_size = 100
+
+		if 'window' in args: #if given length of moving window
+			window_size = args['window']
 
 		vals = data.values
 
@@ -44,8 +47,10 @@ class MatrixModel(DatasetModel):
 
 		print(frames[:3], frames.shape)
 
-		for x in range(len(properties)):
-			frames[:, :, x] = self.basic_normalization(frames[:, :, x])
+		if not 'normalize' in args or args['normalize']: #if no arg given, default to normalize.
+			print("Normalizing...")
+			for x in range(len(properties)):
+				frames[:, :, x] = self.basic_normalization(frames[:, :, x])
 
 		print(frames[len(frames)-3:], frames.shape)
 

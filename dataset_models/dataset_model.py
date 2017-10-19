@@ -10,11 +10,12 @@ class DatasetModel(abc.ABC):
 			self.requires = []
 
 	@abc.abstractmethod
-	def generate(self, properties):
+	def generate(self, properties, args):
 		"""Generates a dataset using the properties provided"""
 	
 	@staticmethod
 	def basic_normalization(arr):
+		print("Normalizing array with shape", arr.shape)
 		minVal = np.min(arr)
 		maxVal = np.max(arr)
 
