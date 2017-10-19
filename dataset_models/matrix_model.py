@@ -20,8 +20,9 @@ class MatrixModel(DatasetModel):
 
 		data.drop('date', axis=1, inplace=True)
 
+		print("Head:")
 		print(data.head(5))
-		print()
+		print("Tail:")
 		print(data.tail(5))
 
 		window_size = 100
@@ -31,7 +32,7 @@ class MatrixModel(DatasetModel):
 
 		vals = data.values
 
-		frames = np.ndarray([len(vals)-window_size+1, window_size, len(properties)], dtype=np.float32)
+		frames = np.ndarray([len(vals)-window_size+1, window_size, len(properties)], dtype=np.float64)
 
 		dates = []
 		
@@ -45,6 +46,7 @@ class MatrixModel(DatasetModel):
 
 			dates.append(allDates.iloc[i+window_size-1])
 
+		print("Head frames:")
 		print(frames[:3], frames.shape)
 
 		if not 'normalize' in args or args['normalize']: #if no arg given, default to normalize.
@@ -52,6 +54,7 @@ class MatrixModel(DatasetModel):
 			for x in range(len(properties)):
 				frames[:, :, x] = self.basic_normalization(frames[:, :, x])
 
+		print("Tail frames:")
 		print(frames[len(frames)-3:], frames.shape)
 
 		dates = np.array(dates) #convert to numpy array
