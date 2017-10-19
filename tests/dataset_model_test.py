@@ -26,5 +26,10 @@ def test_normalization():
 	#negative input
 	res = DatasetModel.basic_normalization(np.array([-5, -4, -3, -2, -1]))
 
-	assert np.array_equal(res, np.array([0, 0.25, 0.5, 0.75, 1]))
+	#2d array
+	res = DatasetModel.basic_normalization(np.array([[1,2],
+													[4,5]]))
+
+	assert np.array_equal(res, np.array([[0, 0.25],
+										[0.75, 1]]))
 
