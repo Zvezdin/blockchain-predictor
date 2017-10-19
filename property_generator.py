@@ -21,15 +21,21 @@ from propertyClosePrice import PropertyClosePrice
 from propertyGasLimit import PropertyGasLimit
 from propertyGasPrice import PropertyGasPrice
 from propertyGasUsed import PropertyGasUsed
+from propertyHighPrice import PropertyHighPrice
+from propertyLowPrice import PropertyLowPrice
 from propertyNetworkHashrate import PropertyNetworkHashrate
 from propertyOpenPrice import PropertyOpenPrice
+from propertyQuoteVolume import PropertyQuoteVolume
 from propertyTransactionCount import PropertyTransactionCount
+from propertyVolume import PropertyVolume
+from propertyWeightedAverage import PropertyWeightedAverage
 
 chunkStore = db.getChunkstore()
 
 
 globalProperties = [PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
-PropertyGasUsed(), PropertyNetworkHashrate(), PropertyOpenPrice(), PropertyTransactionCount()]
+PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(), PropertyQuoteVolume(),
+PropertyTransactionCount(), PropertyVolume(), PropertyWeightedAverage()]
 
 propChunkSize = 'M'
 
