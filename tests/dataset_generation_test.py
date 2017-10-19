@@ -20,7 +20,7 @@ def test_labels():
 	end = None
 
 	#generate a sample dataset
-	ds.run("matrix", "openPrice,closePrice,gasPrice", start, end, filename, "boolean", False)
+	ds.run("matrix", "openPrice,closePrice,gasPrice", start, end, filename, "boolean", '1', False)
 
 	sleep(1) #delay between saving and reading
 
