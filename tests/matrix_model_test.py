@@ -9,7 +9,7 @@ from dataset_model import DatasetModel
 
 from matrix_model import MatrixModel
 
-def test():
+def test_frame():
 	dates = np.array([dt(2017,1,1), dt(2017,1,2), dt(2017,1,3), dt(2017,1,4), dt(2019,3,1)])
 
 	a = pd.DataFrame({'a': np.array([1,2,3,4,5]), 'date': dates}, index=[10,20,30,40,70])
@@ -47,5 +47,42 @@ def test():
 	print(expectation, expectedDates)
 
 	print(expectedDates, resDates)
+
+	assert np.array_equal(res, expectation) and np.array_equal(expectedDates, resDates)
+
+def test_regularization():
+	model = MatrixModel()
+
+	dates = np.array([dt(2017,1,1), dt(2017,1,2), dt(2017,1,3), dt(2017,1,4), dt(2019,3,1)])
+
+	a = pd.DataFrame({'a': np.array([1,2,3,4,5]), 'date': dates}, index=[10,20,30,40,70])
+	b = pd.DataFrame({'b': np.array([5e+20, 4e+20, 3e+20, 2e+20, 1e+20]), 'date': dates})
+
+	properties = [a,b]
+
+	res, resDates = model.generate(properties, {'normalize': True, 'window': 3})
+
+	expectation = np.ndarray((3, 3, 2))
+
+	expectation[0] = np.array([[0., 1],
+								[0.25, 0.75],
+								[0.5, 0.5]])
+
+	expectation[1] = np.array([[0.25, 0.75],
+								[0.5, 0.5],
+								[0.75, 0.25]])
+
+	expectation[2] = np.array([[0.5, 0.5],
+								[0.75, 0.25],
+								[1, 0]])
+							
+
+	expectedDates = dates[2:]
+
+	print("We're expecting:")
+	print(expectation, expectedDates)
+
+	print("But we got:")
+	print(res, resDates, res==expectation)
 
 	assert np.array_equal(res, expectation) and np.array_equal(expectedDates, resDates)
