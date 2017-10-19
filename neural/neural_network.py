@@ -21,8 +21,8 @@ class NeuralNetwork(abc.ABC):
 			/ predictions.shape[0])
 
 	@staticmethod
-	def reformat(dataset, labels, image_size, num_labels):
-		dataset = dataset.reshape((-1, image_size * image_size)).astype(np.float32)
+	def reformat(dataset, labels, image_width, image_height, num_labels):
+		dataset = dataset.reshape((-1, image_width * image_height)).astype(np.float32)
 		# Map 1 to [0.0, 1.0, 0.0 ...], 2 to [0.0, 0.0, 1.0 ...]
 		labels = (np.arange(num_labels) == labels[:,None]).astype(np.float32)
 		return dataset, labels

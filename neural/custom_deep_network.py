@@ -11,21 +11,24 @@ class CustomDeepNetwork(NeuralNetwork):
 		dataset = {}
 		labels = {}
 
-		image_size = 7
+		image_width = 100
+		image_height = 7
 		num_labels = 2
 
+
 		for kind in ['train', 'valid', 'test']:
-			dataset[kind], labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], image_size, num_labels)
+			print("Reformatting dataset with shape", givenDataset[kind].shape)
+			dataset[kind], labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], image_width, image_height, num_labels)
 			print(kind, 'set', dataset[kind].shape, labels[kind].shape)
 
 		print(labels)
 
-		run_train(dataset, labels, image_size, num_labels)
+		run_train(dataset, labels, image_width, image_height, num_labels)
 
 	def predict(self, dataset):
 		""
 
-def build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hidden_nodes, dropoutIndex):
+def build_network(dataset, batch_size, image_width, image_height, num_labels, hidden_layers, hidden_nodes, dropoutIndex, activation):
 	def weight_variable(shape):
 		initial = tf.truncated_normal(shape, stddev=0.05)
 		return tf.Variable(initial)
@@ -41,7 +44,9 @@ def build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hi
 		for i in range(hidden_layers):
 			i+=1 #offset because we've done the first layer
 
-			res = tf.nn.relu(res)
+			if activation == 'relu':
+				print("Using relu activation")
+				res = tf.nn.relu(res)
 
 			if dropout and i == dropoutIndex:
 				res = tf.nn.dropout(res, 0.5)
@@ -63,7 +68,7 @@ def build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hi
 		# at run time with a training minibatch.
 		global tf_train_dataset
 		tf_train_dataset = tf.placeholder(tf.float32,
-							shape=(batch_size, image_size * image_size))
+							shape=(batch_size, image_width * image_height))
 		global tf_train_labels
 		tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
 		tf_valid_dataset = tf.constant(dataset['valid'])
@@ -78,7 +83,7 @@ def build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hi
 		biases = []
 
 		for x in range(hidden_layers+1):
-			width = (image_size * image_size) if x is 0 else hidden_nodes[x-1]
+			width = (image_width * image_height) if x is 0 else hidden_nodes[x-1]
 			height = (num_labels) if x is hidden_layers else hidden_nodes[x]
 			weights.append(weight_variable([width, height]) )
 			biases.append(bias_variable([height]) )
@@ -88,10 +93,10 @@ def build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hi
 		logits = calculate(tf_train_dataset, True)
 		global loss
 		loss = tf.reduce_mean(
-			tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels, logits=logits)) + regularization*l2_loss()
+			tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels, logits=logits)) * 3 + regularization*l2_loss()
 
 		global_step = tf.Variable(0)  # count the number of steps taken.
-		learning_rate = tf.train.exponential_decay(0.001, global_step, 1001, 0.96)
+		learning_rate = tf.train.exponential_decay(0.0001, global_step, 1001, 0.96)
 
 		# Optimizer.
 		global optimizer
@@ -105,26 +110,28 @@ def build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hi
 		global test_prediction
 		test_prediction = tf.nn.softmax(calculate(tf_test_dataset))
 
-def run_train(dataset, labels, image_size, num_labels):
+def run_train(dataset, labels, image_width, image_height, num_labels):
 	batch_size = 128
 
 	hidden_nodes = [2048, 1024, 300, 50]
 
 	hidden_layers = 4
 
-	dropoutIndex = 1
+	activation = 'relu'
+
+	dropoutIndex = 10
 
 	reg_vals=[0]
 	acc_vals = []
 
-	num_steps = 50000
+	num_steps = 10000
 
 	num_batches = 999999999
 
 	steps = []
 	vals = []
 
-	build_network(dataset, batch_size, image_size, num_labels, hidden_layers, hidden_nodes, dropoutIndex)
+	build_network(dataset, batch_size, image_width, image_height, num_labels, hidden_layers, hidden_nodes, dropoutIndex, activation)
 
 	for reg_val in reg_vals:
 		with tf.Session(graph=graph) as session:
