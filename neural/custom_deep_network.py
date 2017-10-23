@@ -11,15 +11,17 @@ class CustomDeepNetwork(NeuralNetwork):
 		dataset = {}
 		labels = {}
 
-		image_width = 100
-		image_height = 7
-		num_labels = 2
+		image_width = givenDataset['train'].shape[2]
+		image_height = givenDataset['train'].shape[1]
+		num_labels = 1
 
 
 		for kind in ['train', 'valid', 'test']:
 			print("Reformatting dataset with shape", givenDataset[kind].shape)
 			dataset[kind], labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], image_width, image_height, num_labels)
 			print(kind, 'set', dataset[kind].shape, labels[kind].shape)
+			print("Labels", givenLabels[kind][:5], labels[kind][:5])
+			print("Neg: %.1f%%" % (100.0 - 100.0 * np.sum(givenLabels[kind]) / len(givenLabels[kind])) )
 
 		print(labels)
 
@@ -93,10 +95,10 @@ def build_network(dataset, batch_size, image_width, image_height, num_labels, hi
 		logits = calculate(tf_train_dataset, True)
 		global loss
 		loss = tf.reduce_mean(
-			tf.nn.softmax_cross_entropy_with_logits(labels=tf_train_labels, logits=logits)) * 3 + regularization*l2_loss()
+			tf.nn.sigmoid_cross_entropy_with_logits(labels=tf_train_labels, logits=logits)) + regularization*l2_loss()
 
 		global_step = tf.Variable(0)  # count the number of steps taken.
-		learning_rate = tf.train.exponential_decay(0.0001, global_step, 1001, 0.96)
+		learning_rate = tf.train.exponential_decay(0.01, global_step, 101, 0.96)
 
 		# Optimizer.
 		global optimizer
@@ -104,27 +106,27 @@ def build_network(dataset, batch_size, image_width, image_height, num_labels, hi
 
 		# Predictions for the training, validation, and test data.
 		global train_prediction
-		train_prediction = tf.nn.softmax(logits)
+		train_prediction = tf.nn.sigmoid(logits)
 		global valid_prediction
-		valid_prediction = tf.nn.softmax(calculate(tf_valid_dataset))
+		valid_prediction = tf.nn.sigmoid(calculate(tf_valid_dataset))
 		global test_prediction
-		test_prediction = tf.nn.softmax(calculate(tf_test_dataset))
+		test_prediction = tf.nn.sigmoid(calculate(tf_test_dataset))
 
 def run_train(dataset, labels, image_width, image_height, num_labels):
 	batch_size = 128
 
-	hidden_nodes = [2048, 1024, 300, 50]
+	hidden_nodes = [2048, 1024, 512, 50]
 
 	hidden_layers = 4
 
 	activation = 'relu'
 
-	dropoutIndex = 10
+	dropoutIndex = 1
 
 	reg_vals=[0]
 	acc_vals = []
 
-	num_steps = 10000
+	num_steps = 30001
 
 	num_batches = 999999999
 
@@ -151,18 +153,36 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 				_, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
 				if (step % 500 == 0):
 					print("Minibatch loss at step %d: %f" % (step, l))
-					print("Minibatch accuracy: %.1f%%" % accuracy(predictions, batch_labels))
-					print(len(predictions[predictions[:,0] > 0.5]), "_", len(predictions))
+					print("Minibatch accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % accuracy(predictions, batch_labels))
+					print(len(predictions[predictions > 0.5]), "_", len(predictions))
 					val_pred = valid_prediction.eval()
-					val = accuracy(val_pred, labels['valid'])
-					print("Validation accuracy: %.1f%%" % val)
-					print(len(val_pred[val_pred[:,0] > 0.5]), "_", len(val_pred))
+					val, pos, neg = accuracy(val_pred, labels['valid'])
+					print("Validation accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % (val, pos, neg))
+					print(len(val_pred[val_pred > 0.5]), "_", len(val_pred))
 					steps.append(step)
 					vals.append(val)
-			test_acc = accuracy(test_prediction.eval(), labels['test'])
+			test_acc, pos, neg = accuracy(test_prediction.eval(), labels['test'])
 			acc_vals.append(test_acc)
-			print("Test accuracy: %.1f%%" % test_acc)
+			print("Test accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % (test_acc, pos, neg))
 
 def accuracy(predictions, labels):
-		return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
-			/ predictions.shape[0])
+		#this was used with softmax activation
+		#return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
+		#	/ predictions.shape[0])
+		intersection = np.round(predictions) == labels
+		print(predictions[:5], labels[:5])
+		print(np.sum(intersection), predictions.shape[0])
+		acc = 100 * np.sum(intersection) / predictions.shape[0]
+		wrong_pos = 0
+		wrong_neg = 0
+
+		for i, res in enumerate(intersection): #for each correctness of returned result
+			if not res: #if the prediction is not correct
+				if not labels[i]: #count wrong positives or negatives
+					wrong_pos +=1
+				else:
+					wrong_neg +=1
+
+		wrong_pos /= predictions.shape[0] / 100 #turn to %
+		wrong_neg /= predictions.shape[0] / 100
+		return (acc, wrong_pos, wrong_neg)
