@@ -28,7 +28,7 @@ class CustomDeepNetwork(NeuralNetwork):
 		run_train(dataset, labels, image_width, image_height, num_labels)
 
 	def predict(self, dataset):
-		""
+		return predict()
 
 def build_network(dataset, batch_size, image_width, image_height, num_labels, hidden_layers, hidden_nodes, dropoutIndex, activation):
 	def weight_variable(shape):
@@ -97,8 +97,13 @@ def build_network(dataset, batch_size, image_width, image_height, num_labels, hi
 		loss = tf.reduce_mean(
 			tf.nn.sigmoid_cross_entropy_with_logits(labels=tf_train_labels, logits=logits)) + regularization*l2_loss()
 
+		#loss = tf.nn.l2_loss(tf.nn.sigmoid(logits) - tf_train_labels)
+
 		global_step = tf.Variable(0)  # count the number of steps taken.
 		learning_rate = tf.train.exponential_decay(0.01, global_step, 101, 0.96)
+
+		print("Shape of logits:")
+		print(logits.shape, tf_train_labels.shape)
 
 		# Optimizer.
 		global optimizer
@@ -112,8 +117,13 @@ def build_network(dataset, batch_size, image_width, image_height, num_labels, hi
 		global test_prediction
 		test_prediction = tf.nn.sigmoid(calculate(tf_test_dataset))
 
+#or 'binary'
+OUTPUT_TYPE = "full"
+
+test_results = None
+
 def run_train(dataset, labels, image_width, image_height, num_labels):
-	batch_size = 128
+	batch_size = 16
 
 	hidden_nodes = [2048, 1024, 512, 50]
 
@@ -121,12 +131,12 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 
 	activation = 'relu'
 
-	dropoutIndex = 1
+	dropoutIndex = 10
 
 	reg_vals=[0]
 	acc_vals = []
 
-	num_steps = 30001
+	num_steps = 5001 * 2
 
 	num_batches = 999999999
 
@@ -161,28 +171,64 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 					print(len(val_pred[val_pred > 0.5]), "_", len(val_pred))
 					steps.append(step)
 					vals.append(val)
-			test_acc, pos, neg = accuracy(test_prediction.eval(), labels['test'])
+
+			global test_results
+			test_results = test_prediction.eval()
+
+			test_acc, pos, neg = accuracy(test_results, labels['test'])
 			acc_vals.append(test_acc)
 			print("Test accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % (test_acc, pos, neg))
+
+def predict():
+	return test_results
 
 def accuracy(predictions, labels):
 		#this was used with softmax activation
 		#return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
 		#	/ predictions.shape[0])
-		intersection = np.round(predictions) == labels
-		print(predictions[:5], labels[:5])
-		print(np.sum(intersection), predictions.shape[0])
-		acc = 100 * np.sum(intersection) / predictions.shape[0]
-		wrong_pos = 0
-		wrong_neg = 0
 
-		for i, res in enumerate(intersection): #for each correctness of returned result
-			if not res: #if the prediction is not correct
-				if not labels[i]: #count wrong positives or negatives
-					wrong_pos +=1
+		if OUTPUT_TYPE == 'binary':
+			intersection = np.round(predictions) == labels
+			print(predictions[:5], labels[:5])
+			print(np.sum(intersection), predictions.shape[0])
+			acc = 100 * np.sum(intersection) / predictions.shape[0]
+			wrong_pos = 0
+			wrong_neg = 0
+
+			for i, res in enumerate(intersection): #for each correctness of returned result
+				if not res: #if the prediction is not correct
+					if not labels[i]: #count wrong positives or negatives
+						wrong_pos +=1
+					else:
+						wrong_neg +=1
+
+			wrong_pos /= predictions.shape[0] / 100 #turn to %
+			wrong_neg /= predictions.shape[0] / 100
+			return (acc, wrong_pos, wrong_neg)
+
+		elif OUTPUT_TYPE == 'full':
+			totalLoss = 0.0
+			nullModelLoss = 0.0
+			wrong_pos = 0
+			wrong_neg = 0
+			
+			for i, res in enumerate(predictions):
+				totalLoss += pow((res - labels[i]), 1)
+
+				nullModelLoss += pow((0.5 - labels[i]), 2)
+				if res >= labels[i]:
+					wrong_pos += 1
 				else:
-					wrong_neg +=1
+					wrong_neg += 1
 
-		wrong_pos /= predictions.shape[0] / 100 #turn to %
-		wrong_neg /= predictions.shape[0] / 100
-		return (acc, wrong_pos, wrong_neg)
+			print("totalLoss is %4f" % totalLoss)
+
+			#nullModelLoss is not really suitable for this
+			#totalLoss /= nullModelLoss
+			totalLoss /= predictions.shape[0]
+			totalLoss = 1 - totalLoss
+			totalLoss *= 100
+			wrong_pos /= predictions.shape[0] / 100.0 #turn to %
+			wrong_neg /= predictions.shape[0] / 100.0
+			return (totalLoss, wrong_pos, wrong_neg)
+
