@@ -24,6 +24,14 @@ class NeuralNetwork(abc.ABC):
 	def reformat(dataset, labels, image_width, image_height, num_labels):
 		dataset = dataset.reshape((-1, image_width * image_height)).astype(np.float32)
 		# Map 1 to [0.0, 1.0, 0.0 ...], 2 to [0.0, 0.0, 1.0 ...]
-		labels = (np.arange(num_labels) != labels[:,None]).astype(np.float32)
-		#else: labels = labels.astype(np.float32) #for binary classification
+
+		#for value generation
+		labels = labels.astype(np.float32)
+
+		labels.reshape((labels.shape[0], 1))
+
+		labels = labels[:, None]
+
+		#for binary classification
+		#labels = (np.arange(num_labels) != labels[:,None]).astype(np.float32)
 		return dataset, labels
