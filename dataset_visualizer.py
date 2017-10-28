@@ -6,6 +6,13 @@ import matplotlib.pyplot as plt
 
 import database_tools as db
 
+
+def plot(values, datesm, title=''):
+		plt.plot(dates, values)
+		plt.xlabel = 'Timeline'
+		plt.ylabel = title
+		plt.show()
+
 if __name__ == "__main__": #if this is the main file, parse the command args
 	parser = argparse.ArgumentParser(description="Tool that can read historical data from the db or from a file and visualize it as a graph.")
 	parser.add_argument('data', type=str, help='The data to visualize. Can be a filepath to a pickled (single!) dataset or a key in the db.')
@@ -22,17 +29,22 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	if args.type=='file':
 		with open(args.data, 'rb') as f:
 			data = pickle.load(f)
-			values = data['dataset'][:, 0, args.index]
-			dates = data['dates']
+			if type(data) != list:
+				data = [data] #turn to single element list
 
-			print(values, dates)
+			for dataset in data:
+				values = dataset['dataset'][:, 0, args.index]
+				dates = dataset['dates']
+
+				print(values, dates)
+
+				plot(values, dates, 'Value of '+args.data)
+				plot(dataset['labels'], dataset['dates'], 'Correct labels')
+
 	elif args.type=='key':
 		data = db.loadData(db.getChunkstore(), args.data, start, end, True)
 		values = data[args.data].values
 		dates = data['date'].values
 
-	plt.plot(dates, values)
-	plt.xlabel = 'Timeline'
-	plt.ylabel = 'Value of '+args.data
-	plt.show()
+		plot(values, dates, 'Value of '+args.data)
 	
