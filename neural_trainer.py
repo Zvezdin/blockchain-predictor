@@ -23,6 +23,12 @@ def loadDataset(filename):
 	with open(filename, 'rb') as f:
 		return pickle.load(f)
 
+def randomizeDataset(dataset, labels):
+	permutation = np.random.permutation(labels.shape[0])
+	shuffled_dataset = dataset[permutation,:,:]
+	shuffled_labels = labels[permutation]
+	return shuffled_dataset, shuffled_labels
+
 def run(dataset, models=None):
 
 	#load the datasets
@@ -40,6 +46,8 @@ def run(dataset, models=None):
 		dates[kind] = rawDataset[i]['dates']
 
 	selectedModels = []
+
+	dataset['train'], labels['train'] = randomizeDataset(dataset['train'], labels['train'])
 
 	if models != None:
 		for model in globalModels:
@@ -105,8 +113,6 @@ def simulateTrading(prediction, actual, startBalance):
 		crypto = False
 
 	return (balance, timesTraded)
-
-
 
 def drawAccuracyGraph(name, dates, prediction, actual):
 	plt.plot(dates, actual, label='Price', color='blue')
