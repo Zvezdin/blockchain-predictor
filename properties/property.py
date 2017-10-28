@@ -24,7 +24,7 @@ class Property(abc.ABC):
 		for i in range(len(val)):
 			avg += float(val[i][index])
 		if avg == 0 or len(val) == 0:
-			print("Got no real data!")
+			print("Got no real data for column %s from data %s." % (column, df))
 		else: avg /= len(val)
 
 		return avg

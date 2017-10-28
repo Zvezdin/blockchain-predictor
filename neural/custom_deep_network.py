@@ -131,12 +131,12 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 
 	activation = 'relu'
 
-	dropoutIndex = 10
+	dropoutIndex = 1
 
 	reg_vals=[0]
 	acc_vals = []
 
-	num_steps = 5001 * 2
+	num_steps = 50001 * 2
 
 	num_batches = 999999999
 
@@ -163,11 +163,11 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 				_, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
 				if (step % 500 == 0):
 					print("Minibatch loss at step %d: %f" % (step, l))
-					print("Minibatch accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % accuracy(predictions, batch_labels))
+					print("Minibatch accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % accuracy(predictions, batch_labels))
 					print(len(predictions[predictions > 0.5]), "_", len(predictions))
 					val_pred = valid_prediction.eval()
 					val, pos, neg = accuracy(val_pred, labels['valid'])
-					print("Validation accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % (val, pos, neg))
+					print("Validation accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % (val, pos, neg))
 					print(len(val_pred[val_pred > 0.5]), "_", len(val_pred))
 					steps.append(step)
 					vals.append(val)
@@ -177,7 +177,7 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 
 			test_acc, pos, neg = accuracy(test_results, labels['test'])
 			acc_vals.append(test_acc)
-			print("Test accuracy: %.1f%% w_pos %.1f%% w_neg %.1f%%" % (test_acc, pos, neg))
+			print("Test accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % (test_acc, pos, neg))
 
 def predict():
 	return test_results
@@ -213,7 +213,7 @@ def accuracy(predictions, labels):
 			wrong_neg = 0
 			
 			for i, res in enumerate(predictions):
-				totalLoss += pow((res - labels[i]), 1)
+				totalLoss += pow(abs(res - labels[i]), 1)
 
 				nullModelLoss += pow((0.5 - labels[i]), 2)
 				if res >= labels[i]:
@@ -223,11 +223,9 @@ def accuracy(predictions, labels):
 
 			print("totalLoss is %4f" % totalLoss)
 
-			#nullModelLoss is not really suitable for this
+			#Note: nullModelLoss is not really suitable for this
 			#totalLoss /= nullModelLoss
 			totalLoss /= predictions.shape[0]
-			totalLoss = 1 - totalLoss
-			totalLoss *= 100
 			wrong_pos /= predictions.shape[0] / 100.0 #turn to %
 			wrong_neg /= predictions.shape[0] / 100.0
 			return (totalLoss, wrong_pos, wrong_neg)
