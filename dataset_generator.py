@@ -68,7 +68,7 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 
 def generateLabels(dates, ticks, labelsType):
 	"""Generates dataset labels for each passed date, getting data from ticks. dates MUST BE CHRONOLOGICALLY ORDERED. """
-	if labelsType == "boolean":
+	if labelsType == "boolean" or labelsType == 'full':
 		labels = []
 		i=0
 		
@@ -88,23 +88,21 @@ def generateLabels(dates, ticks, labelsType):
 			if debug:
 				print(ticks.loc[indices[i] : indices[i+1]])
 
-			sign = nextPrice > currPrice
+			if labelsType == 'boolean':
+				label = nextPrice > currPrice
+			elif labelsType == 'full':
+				label = nextPrice
 			if debug:
-				print("Label for dataframe at %s is %s for prices curr/next : %s and %s" % (date, sign, currPrice, nextPrice) )
-			labels.append(sign)
+				print("Label for dataframe at %s is %s for prices curr/next : %s and %s" % (date, label, currPrice, nextPrice) )
+			labels.append(label)
 
 		#make numpy array
 		labels = np.array(labels)
+
+		if labelsType == 'full': #normalize if we're holding real values
+			labels = DatasetModel.basic_normalization(labels)
+		
 		return (labels, dates)
-
-	elif labelsType == "full":
-		dates = pd.DataFrame({'date': dates})
-		merge = pd.merge(dates, ticks)
-		merge.drop('date', inplace=True)
-		labels = merge.values
-
-		print(labels)
-		return labels
 
 def randomizeDataset(dataset, labels, dates):
 	permutation = np.random.permutation(labels.shape[0])
