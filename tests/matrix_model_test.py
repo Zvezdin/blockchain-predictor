@@ -22,7 +22,7 @@ def test_frame():
 
 	model = MatrixModel()
 
-	res, resDates = model.generate(properties, {'normalize': False, 'window': 3})
+	res, resDates, _ = model.generate(properties, {'normalize': False, 'window': 3})
 
 	print("Got result from model:")
 	print(res, resDates)
@@ -60,7 +60,7 @@ def test_regularization():
 
 	properties = [a,b]
 
-	res, resDates = model.generate(properties, {'normalize': True, 'window': 3})
+	res, resDates, _ = model.generate(properties, {'normalize': True, 'window': 3})
 
 	expectation = np.ndarray((3, 3, 2))
 
