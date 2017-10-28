@@ -1,7 +1,9 @@
 #system-dependent shortcuts to launch geth/mongo
 geth.sh
 mongo.sh
+script/
 
+#project files
 node_modules/
 log.txt
 data/
@@ -15,3 +17,6 @@ time
 pd
 __pycache__/
 .cache/
+
+#others
+todo.txt
