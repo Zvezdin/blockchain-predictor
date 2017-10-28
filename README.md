@@ -2,6 +2,8 @@
 
 A set of tools and scripts that download and process blockchain and cryptocurrency course data, generate a dataset, use it to teach a deep learning neural network to make value predictions and evaluate the result.
 
+The project is a work-in-progress and is yet to give (hopefully) accurate predictions.
+
 ## Installation
 
 ### System dependencies
@@ -101,7 +103,7 @@ python3 property-generator.py -h
 
 After the needed data properties are generated, you can proceed with generating the actual dataset. The dataset is generated using a certain dataset model. There are multiple dataset models that "compile" the properties and structure the dataset in a different way. The default is ```matrix```, which generates matrices from a moving window over all of the properties.
 
-The correct labels for each entry in the dataset are also generated. The default label type is ```boolean```, which represents the sign of the next course change.
+The correct labels for each entry in the dataset are also generated. The default label type is ```boolean```, which represents the sign of the next course change. Label type of ```full``` consists of relative value change.
 
 To generate a dataset from all available data with default settings, run:
 ```bash
@@ -115,9 +117,9 @@ python3 dataset_generator --start 2017-03-14-03 --end 2017-07-03-21
 
 For all available options, please see:
 ```bash
-python3 dataset_generator --help
+python3 dataset_generator -h
 ```
 
-### Training and evaluating the naural network
+### Training and evaluating the neural network
 
 The deep network model is work-in-progress
