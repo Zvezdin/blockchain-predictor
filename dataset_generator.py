@@ -56,9 +56,9 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 			return
 
 	#feed the model the properties and let it generate
-	dataset, dates =  model.generate(properties)
+	dataset, dates, nextPrices =  model.generate(properties)
 
-	labels, dates = generateLabels(dates, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
+	labels, dates = generateLabels(dates, nextPrices, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
 
 	if len(dataset) != len(labels): #if we have a length mismatch, probably due to insufficient data for the last label
 		print("Mismatch in lengths of dataset and labels, removing excessive entries")
@@ -66,9 +66,9 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 
 	return (dataset, labels, dates)
 
-def generateLabels(dates, ticks, labelsType):
+def generateLabels(dates, nextPrices, ticks, labelsType):
 	"""Generates dataset labels for each passed date, getting data from ticks. dates MUST BE CHRONOLOGICALLY ORDERED. """
-	if labelsType == "boolean" or labelsType == 'full':
+	if labelsType == "boolean":
 		labels = []
 		i=0
 		
@@ -88,21 +88,19 @@ def generateLabels(dates, ticks, labelsType):
 			if debug:
 				print(ticks.loc[indices[i] : indices[i+1]])
 
-			if labelsType == 'boolean':
-				label = nextPrice > currPrice
-			elif labelsType == 'full':
-				label = nextPrice
+			label = nextPrice > currPrice
+			
 			if debug:
 				print("Label for dataframe at %s is %s for prices curr/next : %s and %s" % (date, label, currPrice, nextPrice) )
 			labels.append(label)
 
 		#make numpy array
 		labels = np.array(labels)
-
-		if labelsType == 'full': #normalize if we're holding real values
-			labels = DatasetModel.basic_normalization(labels)
 		
 		return (labels, dates)
+
+	elif labelsType == 'full': #nothing to do, the prices are already given and are normalized
+		return (nextPrices, dates)
 
 def randomizeDataset(dataset, labels, dates):
 	permutation = np.random.permutation(labels.shape[0])
