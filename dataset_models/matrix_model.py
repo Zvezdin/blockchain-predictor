@@ -9,14 +9,8 @@ class MatrixModel(DatasetModel):
 		self.name="matrix"
 		self.requires=[]
 
-	def generate(self, properties, args = {'window': 100, 'normalize': True}):
+	def generate(self, properties, args = {}):
 		if not properties: return
-
-		#blacklist = []
-
-		#for prop in properties:
-		#	if prop.columns.contains('stickPrice'):
-		#		blacklist.extend('openPrice', 'closePrice') #if we have stick price, we want to avoid open and close prices in the end dataset.
 
 		data = properties[0] #first property
 
@@ -27,23 +21,50 @@ class MatrixModel(DatasetModel):
 
 		data.drop('date', axis=1, inplace=True)
 
+		column_incides = {}
+
+		for i, col in enumerate(data.columns):
+			column_incides[col] = i
+
+		#argument defaults
+		if 'window' not in args:
+			args['window'] = 10
+		if 'normalize' not in args:
+			args['normalize'] = True
+		#if 'stick' not in args:
+		#	args['stick'] = True
+		if 'price' not in args:
+			try:
+				args['price'] = column_incides['stickPrice']
+				args['price'] = column_incides['closePrice']
+			except KeyError:
+				""
+		if 'localNormalize' not in args:
+			args['localNormalize'] = ['stickPrice']
+		if 'normalization' not in args:
+			args['normalization'] = {'stickPrice': 'around_zero', 'labels': 'around_zero'}
+
+		#remove any zero price deltas - we can't predict based on that
+		data.drop(data[data[data.columns[args['price']]] == 0].index, inplace=True)
+
+		#blacklist = []
+
+		#for prop in properties:
+		#	if prop.columns.contains('stickPrice'):
+		#		blacklist.extend('openPrice', 'closePrice') #if we have stick price, we want to avoid open and close prices in the end dataset.
+
 		print("Head:")
 		print(data.head(5))
 		print("Tail:")
 		print(data.tail(5))
 
-		stickAlgorithm = False
-		try:
-			priceIndex = data.columns.get_loc('stickPrice')
-			stickAlgorithm = True
-		except KeyError:
-			priceIndex = data.columns.get_loc('closePrice')
+		print("DEBUG:")
+		print(data[data['stickPrice'] == 0 ])
 
+		priceIndex = args['price']
+		#stickAlgorithm = args['stick']
 
-		window_size = 10
-
-		if 'window' in args: #if given length of moving window
-			window_size = args['window']
+		window_size = args['window']
 
 		vals = data.values
 
@@ -70,26 +91,53 @@ class MatrixModel(DatasetModel):
 		print("Head frames:")
 		print(frames[:3], frames.shape)
 
-		if not 'normalize' in args or args['normalize']: #if no arg given, default to normalize.
+		localNormalize = []
+
+		try:
+			localNormalize = [column_incides[x] for x in args['localNormalize']]
+		except KeyError:
+			pass
+
+		normalization = []
+
+		for col in data.columns:
+			if col in args['normalization']:
+				normalization.append(args['normalization'][col]) #append the type of normalization for that column index
+			else:
+				normalization.append('basic')
+
+		if args['normalize']:
 			print("Normalizing...")
 			for x in range(len(properties)):
-				if stickAlgorithm and x != priceIndex: #price is normalized via another algorithm
-					frames[:, :, x] = self.basic_normalization(frames[:, :, x])
+				if x not in localNormalize: #local normalization happens via another way
+					print("Globally normalizing property %d with method %s." % (x, normalization[x]))
+					frames[:, :, x] = self.normalize(frames[:, :, x], normalization[x])
 
-		#normalize the price using a candle stick algorithm
-		if stickAlgorithm and priceIndex >= 0:
-			for i, frame in enumerate(frames):
-				#find the delta - distance between min and max price to normalize on.
-				size = frame[:, priceIndex].max() - frame[:, priceIndex].min()
+			#normalize the property and the predicted price locally
+			for x in localNormalize:
+				print("Locally normalizing property %d with method %s." % (x, normalization[x]))
+				for i, frame in enumerate(frames):
+					#find the delta - distance between min and max price to normalize on.
 
-				if size != 0:
-					frame[:, priceIndex] = (frame[:, priceIndex] + size) / (size*2) #normalize to interval [0,1]
-					nextPrices[i] = min((nextPrices[i] + size) / (size*2), 1.0) #normalize the predicted price as well. It may go off bounds, so squash it.
-		else: #normalize the pries the standart way
-			nextPrices = self.basic_normalization(nextPrices)
+					if x == priceIndex: #normalize the price if it walls with this local property
+						nextPrices[i] = min(max(self.normalize(nextPrices[i], normalization[x], frame[:, x]), 0), 1)
+
+					if np.min(frame[:, x]) == 0 and np.max(frame[:, x]) == 0:
+						print("Empty dataset at index %i." % i)
+
+					frame[:, x] = self.normalize(frame[:, x], normalization[x])
+
+			if priceIndex not in localNormalize: #if we haven't normalized the labels yet
+				nextPrices = self.normalize(nextPrices, args['normalization']['labels'])
 		print("Tail frames:")
 		print(frames[len(frames)-3:], frames.shape)
 
 		dates = np.array(dates) #convert to numpy array
 
 		return (frames, dates, nextPrices)
+
+	def normalize(self, arr, method, base = None):
+		if method == 'basic':
+			return self.basic_normalization(arr, base)
+		elif method == 'around_zero':
+			return self.around_zero_normalization(arr, base)
