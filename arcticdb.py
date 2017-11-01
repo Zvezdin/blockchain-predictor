@@ -20,7 +20,7 @@ blockSeries = 10000
 attemptsThreshold = 10
 
 
-priceDataFile = 'data/poloniex_price_data.json'
+priceDataFile = 'data/cryptocompare_price_data.json'
 dataDownloaderScript = '--max-old-space-size=4076 data-downloader.js'
 
 chunkStore = db.getChunkstore()
@@ -36,11 +36,22 @@ def loadRawData(filepath):
 			return loadedData
 	except:
 		return None
+
+def convertTimestamp(x):
+	if 'date' in x:
+		key = 'date'
+	elif 'time' in x:
+		key = 'time'
+	else:
+		raise ValueError('Unsupported timestamp format in given data %s.' % x.keys())
+	x['date'] = dt.utcfromtimestamp(x.pop(key, None)) #remove the old key, convert to date and replace it with 'date'
+
 def processRawCourseData(data):
 
 	start = time.time()
 	for x in data:
-		x['date'] = dt.utcfromtimestamp(x['date'])
+
+		convertTimestamp(x)
 		#x['transactions'] = str(pickle.dumps( [ {'from': 0x1, 'to': 0x2, 'value': 3} for x in range(3) ] ) )
 	print("Processing the data took "+str(time.time() - start)+" seconds")
 
@@ -116,7 +127,7 @@ def getBlockchainFile(arg1, arg2): #the resulting file from the download script 
 def processRawBlockchainData(data):
 	transactions = []
 	for block in data:
-		block['date'] = dt.utcfromtimestamp(block['date']) #transfer date string to date object, used to filter and manage the dt
+		convertTimestamp(block) #transfer date string to date object, used to filter and manage the dt
 		for tx in block['transactions']:
 			tx['date'] = block['date']
 			transactions.append(tx)
