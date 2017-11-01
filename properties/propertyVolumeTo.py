@@ -1,6 +1,6 @@
 from property import Property
 
-class PropertyVolume(Property):
+class PropertyVolumeTo(Property):
 	def __init__(self):
 		self.name = "volumeTo"
 		self.requires = ['tick']
