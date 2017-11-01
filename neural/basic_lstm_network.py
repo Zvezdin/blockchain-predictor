@@ -3,7 +3,7 @@ from neural_network import NeuralNetwork
 import numpy as np
 import math
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense, Activation, Dropout
 from keras.layers import LSTM
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
@@ -39,16 +39,18 @@ class BasicLSTMNetwork(NeuralNetwork):
 
 		model = Sequential()
 
-		for i, layer in enumerate(args['LSTM']):
-			ret_seq=(i< (len(args['LSTM'])-1))
-			if i==0:
-				model.add(LSTM(layer, input_shape=(time_steps, features), return_sequences=ret_seq ) )
-			else:
-				model.add(LSTM(layer, return_sequences=ret_seq ) )
-			print("Adding LSTM Layer of size %d." % layer)
+		model.add(LSTM(50,
+			input_shape=(time_steps, features),
+			return_sequences=True))
+		model.add(Dropout(0.2))
+
+		model.add(LSTM(100, return_sequences=False))
+		model.add(Dropout(0.2))
 
 		model.add(Dense(1))
-		model.compile(loss='mean_squared_error', optimizer='adam')
+
+		model.add(Activation('sigmoid'))
+		model.compile(loss='mean_squared_error', optimizer='rmsprop')
 		model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=2)
 
 		# make predictions
