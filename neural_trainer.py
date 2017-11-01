@@ -30,7 +30,7 @@ def randomizeDataset(dataset, labels):
 	shuffled_labels = labels[permutation]
 	return shuffled_dataset, shuffled_labels
 
-def run(dataset, models, modelArgs, quiet):
+def run(dataset, models, modelArgs, quiet, shuffle):
 
 	#load the datasets
 	rawDataset = loadDataset(dataset)
@@ -48,7 +48,8 @@ def run(dataset, models, modelArgs, quiet):
 
 	selectedModels = []
 
-	dataset['train'], labels['train'] = randomizeDataset(dataset['train'], labels['train'])
+	if shuffle:
+		dataset['train'], labels['train'] = randomizeDataset(dataset['train'], labels['train'])
 
 	if models != None:
 		for model in globalModels:
@@ -135,6 +136,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--args', type=str, help="A list of arguments to be passed on to the models. In the format key1=value1,key2=value2.1;value2.2")
 	parser.add_argument('--quiet', dest='quiet', action="store_true", help="Do not plot graphs, but save them as images.")
 	parser.set_defaults(quiet=False)
+	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don't shuffle the generated dataset and labels.")
+	parser.set_defaults(shuffle=True)
 
 	args, _ = parser.parse_known_args()
 
@@ -155,4 +158,4 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	print("Processed model arguments", modelArgs)
 
-	run(args.dataset, givenModels, modelArgs, args.quiet)
+	run(args.dataset, givenModels, modelArgs, args.quiet, args.shuffle)
