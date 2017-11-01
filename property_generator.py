@@ -162,7 +162,7 @@ def containsFullInterval(data, subset, end):
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	parser = argparse.ArgumentParser(description="Script that uses downloaded blockchain and course data to generate and save data properties")
-	parser.add_argument('--action', type=str, default=None, choices=['generate', 'remove'], help='Whether to generate properties or to remove already generated ones.')
+	parser.add_argument('--action', type=str, default=None, choices=['generate', 'remove'], help='Whether to generate properties or to remove some/all previously generated ones.')
 	parser.add_argument('--properties', type=str, default=None, help='A list of the names of the properties to generate, separated by a comma.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
@@ -179,6 +179,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	if args.action == 'generate':
 		generateProperties(properties, start, end)
 	elif args.action == 'remove':
+		if properties == None: properties = [prop.name for prop in globalProperties]
+
 		for prop in properties:
 			db.removeDB(chunkStore, prop)
 	elif args.action == None or args.list:
