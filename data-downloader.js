@@ -3,7 +3,8 @@ var Web3 = require("web3");
 var https = require("https");
 var fs = require('fs');
 var Stopwatch = require("node-stopwatch").Stopwatch;
- 
+var util = require('util')
+
 var sw = Stopwatch.create();
 
 var web3;
@@ -35,40 +36,19 @@ function initBlockchain(){
 	return true;
 }
 
-function downloadCourse(start, end, count, source, callback){
-	var responseString = "";
-
-	request = "";
-
-	if(source == "poloniex"){
-		request = "https://poloniex.com/public?command=returnChartData&currencyPair=USDT_ETH&start="+start+"&end="+end+"&period=300"
-	}else if(source == "cryptocompare"){
-		request = 'https://min-api.cryptocompare.com/data/histohour?fsym=ETH&tsym=USD&limit='+count+'&aggregate=3&e=CCCAGG&toTs='+start;
-	} else callback(undefined)
-
+function JSONRequest(request, callback){
 	https.get(request, (res) => {
 		console.log('Status code from exchange:', res.statusCode);
 
-		responseString = "";
+		var responseString = "";
 
 		res.on('data', function (chunk) {
 			responseString += chunk;
 		});
 
 		res.on('end', function(){
-			var filename = datadir + source + "_price_data.json"
 
 			console.log("Received "+responseString.length+" bytes");
-
-			fs.writeFile(filename, responseString, function(err) {
-				if(err) {
-					console.log(err);
-					callback(undefined);
-					return;
-				}
-
-				console.log("The data was saved as "+filename);
-			}); 
 
 			callback(JSON.parse(responseString));
 		});
@@ -77,12 +57,85 @@ function downloadCourse(start, end, count, source, callback){
 		console.error(e);
 		callback(undefined);
 	});
+}
 
+function saveJSON(json, filename){
+	fs.writeFile(filename, JSON.stringify(json), function(err) {
+		if(err) {
+			console.log(err);
+			return;
+		}
+
+		console.log("The data was saved as "+filename);
+	}); 
+}
+
+function downloadCourseCryptocompare(start, end, callback){
+	var data = []
+
+	const firstTimestamp = 1438959600 //this timestamp is the first data that this source has
+
+	var sendRequest = function(stB){
+		var request = 'https://min-api.cryptocompare.com/data/histohour?fsym=ETH&tsym=USD&limit=2000&e=CCCAGG&toTs='+stB;
+		JSONRequest(request, function(part){
+			var partData = part.Data.reverse().filter(tick => tick.time >= firstTimestamp) //remove any invalid data that is before the first timestamps
+			data.push.apply(data, partData)
+
+			console.log(util.format("Received data chunk that starts at %d and ends at %d.", part.TimeTo, part.TimeFrom))
+
+			if(part.TimeFrom > start && part.TimeFrom > firstTimestamp)
+				sendRequest(part.TimeFrom-1) //request the next batch
+			else{
+				for(var i=0; i<data.length-1; i++){ //validate that we have all data in the correct hourly intervals
+					if (data[i].time - 3600 != data[i+1].time){
+						console.log(util.format("Mismatch between dates %d and %d with difference %d.", data[i].time, data[i+1].time, data[i+1].time-data[i].time))
+					}
+				}
+
+				data.reverse()
+
+				callback(data)
+			}
+		})
+	}
+
+	sendRequest(end)
+}
+
+function downloadCoursePoloniex(start, end, callback){
+	var request = "https://poloniex.com/public?command=returnChartData&currencyPair=USDT_ETH&start="+start+"&end="+end+"&period=300"
+
+	JSONRequest(request, function(res){
+		callback(res)
+	});
+}
+
+function downloadCourse(start, end, source, callback){
+
+	var request = "";
+
+	var saveCallback = function(data){
+		if (data != undefined){
+			console.log(data.length, data[0], data[data.length-1])
+
+			saveJSON(data, datadir + source + "_price_data.json")
+		}
+
+		callback(data)
+	}
+
+	if(source == "poloniex"){
+		downloadCoursePoloniex(start, end, saveCallback)
+	}else if(source == "cryptocompare"){
+		downloadCourseCryptocompare(start, end, saveCallback)
+	} else callback(undefined)
 }
 
 function downloadWholeCourse(){
-	downloadCourse(1, 999999999999999, undefined, "poloniex", function(result){
-		//console.log(result);
+	downloadCourse(1, 999999999999999, "cryptocompare", function(result){
+		if(result == undefined){
+			console.error("Error while downloading course!")
+		}
 	});
 }
 
