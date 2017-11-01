@@ -10,7 +10,7 @@ import database_tools as db
 def plot(values, datesm, title=''):
 		plt.plot(dates, values)
 		plt.xlabel = 'Timeline'
-		plt.ylabel = title
+		plt.title(title)
 		plt.show()
 
 if __name__ == "__main__": #if this is the main file, parse the command args

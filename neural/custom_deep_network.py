@@ -100,7 +100,7 @@ def build_network(dataset, batch_size, image_width, image_height, num_labels, hi
 		#loss = tf.nn.l2_loss(tf.nn.sigmoid(logits) - tf_train_labels)
 
 		global_step = tf.Variable(0)  # count the number of steps taken.
-		learning_rate = tf.train.exponential_decay(0.01, global_step, 101, 0.96)
+		learning_rate = tf.train.exponential_decay(0.001, global_step, 1001, 0.96)
 
 		print("Shape of logits:")
 		print(logits.shape, tf_train_labels.shape)
@@ -123,7 +123,7 @@ OUTPUT_TYPE = "full"
 test_results = None
 
 def run_train(dataset, labels, image_width, image_height, num_labels):
-	batch_size = 16
+	batch_size = 2
 
 	hidden_nodes = [2048, 1024, 512, 50]
 
@@ -136,7 +136,7 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 	reg_vals=[0]
 	acc_vals = []
 
-	num_steps = 50001 * 2
+	num_steps = 50001
 
 	num_batches = 999999999
 
@@ -149,29 +149,31 @@ def run_train(dataset, labels, image_width, image_height, num_labels):
 		with tf.Session(graph=graph) as session:
 			tf.global_variables_initializer().run()
 			print("Initialized")
-			for step in range(num_steps):
-				# Pick an offset within the training data, which has been randomized.
-				# Note: better randomization across epochs needed.
-				offset = ((step % num_batches) * batch_size) % ( labels['train'].shape[0] - batch_size)
-				# Generate a minibatch.
-				batch_data = dataset['train'][offset:(offset + batch_size), :]
-				batch_labels = labels['train'][offset:(offset + batch_size), :]
-				# Prepare a dictionary telling the session where to feed the minibatch.
-				# The key of the dictionary is the placeholder node of the graph to be fed,
-				# and the value is the numpy array to feed to it.
-				feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels, regularization: reg_val}
-				_, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
-				if (step % 500 == 0):
-					print("Minibatch loss at step %d: %f" % (step, l))
-					print("Minibatch accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % accuracy(predictions, batch_labels))
-					print(len(predictions[predictions > 0.5]), "_", len(predictions))
-					val_pred = valid_prediction.eval()
-					val, pos, neg = accuracy(val_pred, labels['valid'])
-					print("Validation accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % (val, pos, neg))
-					print(len(val_pred[val_pred > 0.5]), "_", len(val_pred))
-					steps.append(step)
-					vals.append(val)
-
+			try:
+				for step in range(num_steps):
+					# Pick an offset within the training data, which has been randomized.
+					# Note: better randomization across epochs needed.
+					offset = ((step % num_batches) * batch_size) % ( labels['train'].shape[0] - batch_size)
+					# Generate a minibatch.
+					batch_data = dataset['train'][offset:(offset + batch_size), :]
+					batch_labels = labels['train'][offset:(offset + batch_size), :]
+					# Prepare a dictionary telling the session where to feed the minibatch.
+					# The key of the dictionary is the placeholder node of the graph to be fed,
+					# and the value is the numpy array to feed to it.
+					feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels, regularization: reg_val}
+					_, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
+					if (step % 500 == 0):
+						print("Minibatch loss at step %d: %f" % (step, l))
+						print("Minibatch accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % accuracy(predictions, batch_labels))
+						print(len(predictions[predictions > 0.5]), "_", len(predictions))
+						val_pred = valid_prediction.eval()
+						val, pos, neg = accuracy(val_pred, labels['valid'])
+						print("Validation accuracy: %.5f%% w_pos %.1f%% w_neg %.1f%%" % (val, pos, neg))
+						print(len(val_pred[val_pred > 0.5]), "_", len(val_pred))
+						steps.append(step)
+						vals.append(val)
+			except KeyboardInterrupt:
+				print("Got interrupt at step %d. Stopping training..." % step)
 			global test_results
 			test_results = test_prediction.eval()
 
