@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyVolumeFrom(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "volumeFrom"
 		self.requires = ['tick']
 

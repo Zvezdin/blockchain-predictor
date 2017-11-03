@@ -4,8 +4,12 @@ class Property(abc.ABC):
 	"""A property class with a unified interface on the different data properties and their generation"""
 
 	def __init__(self):
+		#ID of the property
 		self.name = ""
+		#What kind of data it requires. 'block', 'tx' or 'tick' for example
 		self.requires = []
+		#If the generated properties can be turned relative. True if value is already relative
+		self.isRelative = False
 
 		self.requiresHistoricalData  = False
 		"""A flag that shows if the given property requires all available data for all date intervals to be sent to it. For example, if it does internal storage or calculations and previous processing of ticks has an effect on future processes."""

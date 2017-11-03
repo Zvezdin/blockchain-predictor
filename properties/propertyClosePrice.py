@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyClosePrice(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "closePrice"
 		self.requires = ['tick']
 

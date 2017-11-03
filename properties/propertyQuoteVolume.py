@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyQuoteVolume(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "quoteVolume"
 		self.requires = ['tick']
 

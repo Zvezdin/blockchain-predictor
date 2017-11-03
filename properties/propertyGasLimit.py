@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyGasLimit(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "gasLimit"
 		self.requires = ['block']
 

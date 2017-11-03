@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyTransactionCount(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "transactionCount"
 		self.requires = ['tx']
 

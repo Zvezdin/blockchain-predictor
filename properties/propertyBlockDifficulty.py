@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyBlockDifficulty(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "blockDifficulty"
 		self.requires = ['block']
 

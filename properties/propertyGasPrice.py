@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyGasPrice(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "gasPrice"
 		self.requires=['tx']
 

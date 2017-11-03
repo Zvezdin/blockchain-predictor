@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyGasUsed(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "gasUsed"
 		self.requires = ['block']
 

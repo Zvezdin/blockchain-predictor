@@ -2,6 +2,7 @@ from property import Property
 
 class PropertyNetworkHashrate(Property):
 	def __init__(self):
+		super().__init__()
 		self.name = "networkHashrate"
 		self.requires = ['block']
 
