@@ -63,3 +63,13 @@ class NeuralNetwork(abc.ABC):
 		total /= len(labels)
 
 		return total
+
+	@staticmethod
+	def R2(labels, prediction):
+		sumOfErrors = 0.0
+		nullModel = 0.0
+		for i in range(len(labels)):
+			sumOfErrors += pow(labels[i] - prediction[i], 2)
+			nullModel += pow(0.5 - prediction[i], 2)
+
+		return 1 - sumOfErrors / nullModel
