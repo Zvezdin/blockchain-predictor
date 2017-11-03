@@ -66,25 +66,25 @@ def run(dataset, models, modelArgs, quiet, shuffle):
 
 	print("Running prediction on test dataset.")
 
-	predictions = []
+	for setType in ['test']: # used to contain 'train' as well, for debug
+		predictions = []
 
+		for model in selectedModels:
+			#TODO don't rely on the model's memory of the dataset.
+			res = model.predict(setType)
 
-	for model in selectedModels:
-		#TODO don't rely on the model's memory of the dataset.
-		res = model.predict(None)
+			p = dates[setType].argsort()
 
-		p = dates['test'].argsort()
+			predictions.append({'model': model.name, 'prediction': res[p], 'actual': labels[setType][p], 'dates': dates[setType][p]})
 
-		predictions.append({'model': model.name, 'prediction': res[p], 'actual': labels['test'][p], 'dates': dates['test'][p]})
+		print("Starting simulated trading to evaluate results")
 
-	print("Starting simulated trading to evaluate results")
+		for pred in predictions:
+			res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
+			print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
 
-	for pred in predictions:
-		res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
-		print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
-
-	for pred in predictions:
-		drawAccuracyGraph(pred['model'], pred['dates'], pred['prediction'], pred['actual'], quiet)
+		for pred in predictions:
+			drawAccuracyGraph(pred['model'], pred['dates'], pred['prediction'], pred['actual'], quiet)
 
 def simulateTrading(prediction, actual, startBalance):
 	balance = startBalance #start with 100 of the stable currency
@@ -118,7 +118,8 @@ def simulateTrading(prediction, actual, startBalance):
 
 def drawAccuracyGraph(name, dates, prediction, actual, save=False):
 	plt.plot(dates, actual, label='Price', color='blue')
-	plt.plot(dates, prediction, label='Predicted', color='red')
+	if prediction is not None:
+		plt.plot(dates, prediction, label='Predicted', color='red')
 	plt.x = dates
 	plt.title('Price vs Predicted on %s' % name)
 	plt.legend(loc='upper left')
@@ -149,7 +150,9 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		key, value = pair.split('=')
 
 		try:
-			value = int(value)
+			value = float(value)
+			if value == int(value):
+				value = int(value)
 		except ValueError:
 			if ':' in value:
 				value = [int(i) for i in value.split(':')]
