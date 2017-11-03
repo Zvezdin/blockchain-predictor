@@ -28,24 +28,27 @@ class MatrixModel(DatasetModel):
 
 		#argument defaults
 		if 'window' not in args:
-			args['window'] = 10
+			args['window'] = 100
 		if 'normalize' not in args:
 			args['normalize'] = True
-		#if 'stick' not in args:
-		#	args['stick'] = True
 		if 'price' not in args:
 			try:
 				args['price'] = column_incides['stickPrice']
-				args['price'] = column_incides['closePrice']
 			except KeyError:
-				""
+				try:
+					args['price'] = column_incides['closePrice']
+				except KeyError:
+					raise #we have no idea which is the price index
 		if 'localNormalize' not in args:
-			args['localNormalize'] = ['stickPrice']
+			args['localNormalize'] = [None]#['stickPrice']
 		if 'normalization' not in args:
-			args['normalization'] = {'stickPrice': 'around_zero', 'labels': 'around_zero'}
+			args['normalization'] = {'stickPrice': 'around_zero', 'closePrice': 'around_zero', 'labels': 'around_zero'}
+		if 'binary' not in args:
+			args['binary'] = False
 
-		#remove any zero price deltas - we can't predict based on that
-		data.drop(data[data[data.columns[args['price']]] == 0].index, inplace=True)
+		#this method can backfire, so it is disabled temporairly
+			#remove any zero price deltas - we can't predict based on that
+		#data.drop(data[data[data.columns[args['price']]] == 0].index, inplace=True)
 
 		#blacklist = []
 
@@ -58,8 +61,6 @@ class MatrixModel(DatasetModel):
 		print("Tail:")
 		print(data.tail(5))
 
-		print("DEBUG:")
-		print(data[data['stickPrice'] == 0 ])
 
 		priceIndex = args['price']
 		#stickAlgorithm = args['stick']
@@ -104,7 +105,7 @@ class MatrixModel(DatasetModel):
 			if col in args['normalization']:
 				normalization.append(args['normalization'][col]) #append the type of normalization for that column index
 			else:
-				normalization.append('basic')
+				normalization.append('around_zero')
 
 		if args['normalize']:
 			print("Normalizing...")
@@ -129,6 +130,13 @@ class MatrixModel(DatasetModel):
 
 			if priceIndex not in localNormalize: #if we haven't normalized the labels yet
 				nextPrices = self.normalize(nextPrices, args['normalization']['labels'])
+
+		if args['binary']:
+			print("Converting data to binary! May cause issues.")
+			for x in range(len(properties)):
+				frames[:, :, x] = self.conver_to_binary(frames[:, :, x])
+				nextPrices = self.conver_to_binary(nextPrices)
+
 		print("Tail frames:")
 		print(frames[len(frames)-3:], frames.shape)
 
