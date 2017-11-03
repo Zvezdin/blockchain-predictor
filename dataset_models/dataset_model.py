@@ -38,3 +38,7 @@ class DatasetModel(abc.ABC):
 		#is within [0;1] and 0.5 is 0
 
 		return arr
+
+	@staticmethod
+	def conver_to_binary(arr):
+		return (arr >= 0.5).astype(np.float32)
