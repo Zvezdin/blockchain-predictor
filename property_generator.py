@@ -45,7 +45,7 @@ propChunkSize = 'M'
 debug = False
 
 
-def generateProperties(selectedProperties = None, start = None, end = None):
+def generateProperties(selectedProperties = None, start = None, end = None, relative = False):
 	values = {} #a dict that holds an array of the returned values for each property
 
 	dub = {}
@@ -79,6 +79,13 @@ def generateProperties(selectedProperties = None, start = None, end = None):
 	forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
 
 	for prop in properties:
+		if relative and not prop.isRelative: #turn that property into relative values
+			print("Turning property %s into relative values." % prop.name)
+			for i in range(len(values[prop.name])-1, -1, -1): #reverse index iteration
+				if i > 0:
+					values[prop.name][i][prop.name] = values[prop.name][i][prop.name] - values[prop.name][i-1][prop.name]
+			values[prop.name].pop(0) #remove the first value as we can't relative that
+
 		df = db.getDataFrame(values[prop.name])
 		print("Saving prop " + prop.name+ " with values ", df)
 		print("With byte size:", sys.getsizeof(df))
@@ -170,6 +177,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--list', dest='list', action="store_true", help="List the available properties that can be generated.")
 	parser.set_defaults(list=False)
+	parser.add_argument('--relative', dest='relative', action="store_true", help="Generate the properties with relative values.")
+	parser.set_defaults(relative=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -179,7 +188,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	properties = args.properties.split(',') if args.properties != None  else None
 
 	if args.action == 'generate':
-		generateProperties(properties, start, end)
+		generateProperties(properties, start, end, args.relative)
 	elif args.action == 'remove':
 		if properties == None: properties = [prop.name for prop in globalProperties]
 
