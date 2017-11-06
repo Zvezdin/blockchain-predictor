@@ -28,7 +28,7 @@ class MatrixModel(DatasetModel):
 
 		#argument defaults
 		if 'window' not in args:
-			args['window'] = 100
+			args['window'] = 24
 		if 'normalize' not in args:
 			args['normalize'] = True
 		if 'price' not in args:

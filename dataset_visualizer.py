@@ -33,7 +33,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 				data = [data] #turn to single element list
 
 			for dataset in data:
-				values = dataset['dataset'][:, 0, args.index]
+				values = dataset['dataset'][:, -1, args.index]
 				dates = dataset['dates']
 
 				print(values, dates)

@@ -7,7 +7,7 @@ class CustomDeepNetwork(NeuralNetwork):
 	def __init__(self):
 		self.name="CustomDeep"
 
-	def train(self, givenDataset, givenLabels):
+	def train(self, givenDataset, givenLabels, args = {}):
 		dataset = {}
 		labels = {}
 
