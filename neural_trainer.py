@@ -30,25 +30,34 @@ def randomizeDataset(dataset, labels):
 	shuffled_labels = labels[permutation]
 	return shuffled_dataset, shuffled_labels
 
-def run(dataset, models, modelArgs, quiet, shuffle):
+def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 
 	#load the datasets
-	rawDataset = loadDataset(dataset)
+	rawDataset = loadDataset(datasetFile)
 
 	dataset = {}
 	labels = {}
 	dates = {}
 
-	for i, kind in enumerate(['train', 'valid', 'test']):
-		dataset[kind] = rawDataset[i]['dataset']
+	for i, kind in enumerate(['warm', 'train', 'test']):
+		targetLen = len(rawDataset[i]['dataset'])
 
-		labels[kind] = rawDataset[i]['labels']
+		if trim:
+			if not quiet:
+				print("Trimming all datasets.")
+			targetLen -= targetLen % modelArgs['batch']
 
-		dates[kind] = rawDataset[i]['dates']
+		dataset[kind] = rawDataset[i]['dataset'][:targetLen]
+
+		labels[kind] = rawDataset[i]['labels'][:targetLen]
+
+		dates[kind] = rawDataset[i]['dates'][:targetLen]
+
 
 	selectedModels = []
 
 	if shuffle:
+		print("Shuffling train dataset.")
 		dataset['train'], labels['train'] = randomizeDataset(dataset['train'], labels['train'])
 
 	if models != None:
@@ -57,16 +66,19 @@ def run(dataset, models, modelArgs, quiet, shuffle):
 				selectedModels.append(model)
 	else: selectedModels = globalModels
 
-	print("Starting to train and evaluate the following networks: ", [net.name for net in selectedModels])
+	if not quiet:
+		print("Starting to train and evaluate the following networks: ", [net.name for net in selectedModels])
 
 	for model in selectedModels:
 		model.train(dataset, labels, modelArgs)
 
-	print("Trained the networks.")
+	if not quiet:
+		print("Trained the networks.")
 
-	print("Running prediction on test dataset.")
+	if not quiet:
+		print("Running prediction on test dataset.")
 
-	for setType in ['test']: # used to contain 'train' as well, for debug
+	for setType in ['train', 'test']: # used to contain 'train' as well, for debug
 		predictions = []
 
 		for model in selectedModels:
@@ -77,14 +89,17 @@ def run(dataset, models, modelArgs, quiet, shuffle):
 
 			predictions.append({'model': model.name, 'prediction': res[p], 'actual': labels[setType][p], 'dates': dates[setType][p]})
 
-		print("Starting simulated trading to evaluate results")
+		if not quiet:
+			print("Starting simulated trading to evaluate results")
 
 		for pred in predictions:
 			res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
-			print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
+			if not quiet:
+				print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
 
+		print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 		for pred in predictions:
-			drawAccuracyGraph(pred['model'], pred['dates'], pred['prediction'], pred['actual'], quiet)
+			drawAccuracyGraph(pred['model'], pred['dates'], pred['prediction'], pred['actual'], quiet, setType)
 
 def simulateTrading(prediction, actual, startBalance):
 	balance = startBalance #start with 100 of the stable currency
@@ -116,7 +131,8 @@ def simulateTrading(prediction, actual, startBalance):
 
 	return (balance, timesTraded)
 
-def drawAccuracyGraph(name, dates, prediction, actual, save=False):
+def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'test'):
+	plt.clf() #clear figure
 	plt.plot(dates, actual, label='Price', color='blue')
 	if prediction is not None:
 		plt.plot(dates, prediction, label='Predicted', color='red')
@@ -126,7 +142,7 @@ def drawAccuracyGraph(name, dates, prediction, actual, save=False):
 	if not save:
 		plt.show()
 	else:
-		filename = "data/results/%s.svg" % str(dt.now())
+		filename = "data/results/%s_%s.svg" % (str(dt.now()), setType)
 		plt.savefig(filename, dpi = 1500)
 		print("Saved accuracy graph at %s." % filename)
 
@@ -137,8 +153,10 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--args', type=str, help="A list of arguments to be passed on to the models. In the format key1=value1,key2=value2.1;value2.2")
 	parser.add_argument('--quiet', dest='quiet', action="store_true", help="Do not plot graphs, but save them as images.")
 	parser.set_defaults(quiet=False)
-	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don't shuffle the generated dataset and labels.")
-	parser.set_defaults(shuffle=True)
+	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Don't shuffle the generated dataset and labels.")
+	parser.set_defaults(shuffle=False)
+	parser.add_argument('--trim-batch', dest='trim', action="store_true", help="Don't shuffle the generated dataset and labels.")
+	parser.set_defaults(trim=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -161,4 +179,4 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	print("Processed model arguments", modelArgs)
 
-	run(args.dataset, givenModels, modelArgs, args.quiet, args.shuffle)
+	run(args.dataset, givenModels, modelArgs, args.quiet, args.shuffle, args.trim)
