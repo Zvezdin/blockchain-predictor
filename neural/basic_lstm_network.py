@@ -4,7 +4,7 @@ import numpy as np
 import math
 from keras.models import Sequential
 from keras.layers import *
-from keras.optimizers import RMSprop
+from keras.optimizers import *
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 
@@ -30,6 +30,8 @@ class BasicLSTMNetwork(NeuralNetwork):
 			args['batch'] = 16
 		if 'lr' not in args:
 			args['lr'] = 0.0001
+		if 'stateful' not in args:
+			args['stateful'] = True
 
 		#remove any zero-size LSTM/dense layers
 		for arr in [args['LSTM'], args['dense']]:
@@ -40,7 +42,7 @@ class BasicLSTMNetwork(NeuralNetwork):
 		num_labels = 1
 
 
-		for kind in ['train', 'valid', 'test']:
+		for kind in ['warm', 'train', 'test']:
 			#reformat only the labels first
 			_, labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], features, time_steps, num_labels)
 			#reformat the dataset for LSTM format of [samples, time steps, features]
@@ -52,44 +54,60 @@ class BasicLSTMNetwork(NeuralNetwork):
 		for i, layer in enumerate(args['LSTM']):
 			ret_seq=(i< (len(args['LSTM'])-1))
 			if i==0:
-				model.add(LSTM(layer, input_shape=(time_steps, features), return_sequences=ret_seq ) )
+				model.add(Bidirectional(SimpleRNN(layer, return_sequences=ret_seq, stateful=args['stateful'] ), batch_input_shape=(args['batch'], time_steps, features) ) )
+				model.add(Dropout(0.1))
 			else:
-				model.add(LSTM(layer, return_sequences=ret_seq ) )
-			model.add(Dropout(0.2))
+				model.add(Bidirectional(SimpleRNN(layer, return_sequences=ret_seq, stateful=args['stateful'] ) ) )
+			model.add(Activation('relu'))
 			print("Adding LSTM Layer of size %d." % layer)
 
 		for dense in args['dense']:
 			model.add(Dense(dense))
 			#model.add(Activation('relu'))
 
-		model.add(Dense(1))
+		model.add(Dense(1, activation='linear'))
 
-		model.add(Activation('linear'))
+		model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
 
-		opt = RMSprop(args['lr'])
+		opt = Adam(args['lr'])
 
 		model.compile(loss='mean_squared_error', optimizer=opt)
-		model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=2)
+
+		if not args['stateful']:
+			model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=0, shuffle=False)
+		else:
+			for i in range(args['epoch']):
+				model.predict(dataset['warm'], batch_size=args['batch']) #predict so that fitting starts with a state
+				model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], verbose=0, shuffle=False)
+				model.reset_states()
 
 		# make predictions
 		self.prediction = {}
+
+		model.predict(dataset['warm'], batch_size=args['batch'])
+		self.prediction['train'] = model.predict(dataset['train'], batch_size=args['batch'])
+		self.prediction['test'] = model.predict(dataset['test'], batch_size=args['batch'])
+		model.reset_states()
+
+		self.scorePrediction(self.prediction, labels, 'train')
+		self.scorePrediction(self.prediction, labels, 'test')
+
+			
+
+	def predict(self, setType):
+		return self.prediction[setType]
+
+	def scorePrediction(self, prediction, labels, kind):
 		score = {}
 		sign = {}
 		custom = {}
 		R2 = {}
 
-		for kind in ['train', 'valid', 'test']:
-			self.prediction[kind] = model.predict(dataset[kind])
+		# calculate root mean squared error
+		score[kind] = self.RMSE(labels[kind], self.prediction[kind][:,0])
+		sign[kind] = self.sign_accuracy(labels[kind], self.prediction[kind][:,0])
+		custom[kind] = self.custom_accuracy(labels[kind], self.prediction[kind][:,0])
+		R2[kind] = self.R2(labels[kind], self.prediction[kind][:,0])
 
-			# calculate root mean squared error
-			score[kind] = self.RMSE(labels[kind], self.prediction[kind][:,0])
-			sign[kind] = self.sign_accuracy(labels[kind], self.prediction[kind][:,0])
-			custom[kind] = self.custom_accuracy(labels[kind], self.prediction[kind][:,0])
-			R2[kind] = self.R2(labels[kind], self.prediction[kind][:,0])
-
-			print("Scores for %s." % kind)
-			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
-			
-
-	def predict(self, setType):
-		return self.prediction[setType]
+		print("Scores for %s." % kind)
+		print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
