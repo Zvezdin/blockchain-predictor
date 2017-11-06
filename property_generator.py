@@ -15,6 +15,7 @@ import database_tools as db
 sys.path.insert(0, os.path.realpath('properties'))
 
 from property import Property
+from propertyAccountDistribution import PropertyAccountDistribution
 from propertyBlockDifficulty import PropertyBlockDifficulty
 from propertyBlockSize import PropertyBlockSize
 from propertyClosePrice import PropertyClosePrice
@@ -36,7 +37,7 @@ from propertyVolumeTo import PropertyVolumeTo
 chunkStore = db.getChunkstore()
 
 
-globalProperties = [PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
+globalProperties = [PropertyAccountDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
 PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(),
 PropertyStickPrice(), PropertyTransactionCount(), PropertyVolumeFrom(), PropertyVolumeTo()]
 
@@ -63,7 +64,12 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 	print("Working with properties:", properties)
 
 	for prop in properties:
-		values[prop.name]= []
+
+		if prop.provides == None:
+			values[prop.name]= []
+		else:
+			for name in prop.provides:
+				values[name] = []
 		for req in prop.requires:
 			if not req in dub:
 				dub[req] = True
@@ -74,28 +80,66 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 		for prop in properties:
 			val = prop.processTick(data)
 			if debug: print("Got value", val, "for property", prop.name)
-			values[prop.name].append({'date': date, prop.name: val})
+
+			if prop.provides != None:
+				if len(prop.provides) != len(val):
+					raise ValueError('The length of the returned child properties does not match the list of child ones by property %s !' % prop.name)
+				for i, provided in enumerate(prop.provides):
+					values[provided].append({'date': date, provided: val[i]})
+			else:
+				values[prop.name].append({'date': date, prop.name: val})
 
 	forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
+
+
+
+	#hold the property names that don't provide children in a list
+	propNames = [prop.name for prop in properties if prop.provides == None]
+
+	#take the children those who provide them
+	for prop in properties:
+		if prop.provides != None:
+			propNames.extend(prop.provides)
+
+
+	#save the raw property values
+	for prop in propNames:
+		try:
+			saveProperty(prop, values[prop])
+		except:
+			print("Failed saving property!", sys.exc_info()[0])
 
 	for prop in properties:
 		if relative and not prop.isRelative: #turn that property into relative values
 			print("Turning property %s into relative values." % prop.name)
-			for i in range(len(values[prop.name])-1, -1, -1): #reverse index iteration
-				if i > 0:
-					values[prop.name][i][prop.name] = values[prop.name][i][prop.name] - values[prop.name][i-1][prop.name]
-			values[prop.name].pop(0) #remove the first value as we can't relative that
 
-		df = db.getDataFrame(values[prop.name])
-		print("Saving prop " + prop.name+ " with values ", df)
+			names = [prop.name]
+
+			if prop.provides != None:
+				names = prop.provides
+
+			for name in names:
+				values[name+"_rel"] = values.pop(name) #rename the main property key
+				for i in range(len(values[name+'_rel'])-1, -1, -1): #reverse index iteration
+					if i > 0:
+						values[name+'_rel'][i][name] = values[name+'_rel'][i][name] - values[name+'_rel'][i-1][name]
+
+						values[name+'_rel'][i][name+'_rel'] = values[name+'_rel'][i].pop(name) # rename the value key
+
+				values[name+'_rel'].pop(0) #remove the first value as we can't relative that
+
+				try:
+					saveProperty(name+'_rel', values[name+'_rel'])
+				except:
+					print("Failed saving property!", sys.exc_info()[0])
+
+def saveProperty(name, val, quiet = False):
+	if not quiet:
+		df = db.getDataFrame(val)
+		print("Saving prop " + name+ " with values ", df.head(5), df.tail(5))
 		print("With byte size:", sys.getsizeof(df))
 
-		try:
-			db.saveData(chunkStore, prop.name, values[prop.name], propChunkSize)
-		except:
-			print("Failed saving property!", sys.exc_info()[0])
-
-
+	db.saveData(chunkStore, name, val, propChunkSize)
 
 def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 	#get the time interval where we have all needed data
@@ -190,7 +234,19 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	if args.action == 'generate':
 		generateProperties(properties, start, end, args.relative)
 	elif args.action == 'remove':
-		if properties == None: properties = [prop.name for prop in globalProperties]
+		if properties == None:
+			properties = [prop.name for prop in globalProperties if prop.provides == None]
+
+			for prop in globalProperties:
+				if prop.provides != None:
+					properties.extend(prop.provides)
+
+			relProps = properties.copy()
+
+			for i, prop in enumerate(relProps):
+				relProps[i] += '_rel'
+
+			properties.extend(relProps)
 
 		for prop in properties:
 			db.removeDB(chunkStore, prop)
