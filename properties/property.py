@@ -6,6 +6,9 @@ class Property(abc.ABC):
 	def __init__(self):
 		#ID of the property
 		self.name = ""
+
+		self.provides = None #List of the IDs of any other sub-properties that this may provide
+
 		#What kind of data it requires. 'block', 'tx' or 'tick' for example
 		self.requires = []
 		#If the generated properties can be turned relative. True if value is already relative
