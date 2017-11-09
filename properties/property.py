@@ -36,5 +36,21 @@ class Property(abc.ABC):
 
 		return avg
 	
+	@staticmethod
+	def maxOfColumn(df, column):
+		index = df.columns.searchsorted(column)
+
+		val = df.values
+
+		return max(val)
+
+	@staticmethod
+	def minOfColumn(df, column):
+		index = df.columns.searchsorted(column)
+
+		val = df.values
+
+		return min(val)
+
 	def __str__(self):
 		return "Property "+self.name
