@@ -7,4 +7,4 @@ class PropertyHighPrice(Property):
 		self.requires = ['tick']
 
 	def processTick(self, data):
-		return self.averageOfColumn(data[self.requires[0]], 'high')
+		return self.maxOfColumn(data[self.requires[0]], 'high')

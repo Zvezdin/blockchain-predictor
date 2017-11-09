@@ -7,4 +7,4 @@ class PropertyLowPrice(Property):
 		self.requires = ['tick']
 
 	def processTick(self, data):
-		return self.averageOfColumn(data[self.requires[0]], 'low')
+		return self.minOfColumn(data[self.requires[0]], 'low')
