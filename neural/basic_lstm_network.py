@@ -31,7 +31,7 @@ class BasicLSTMNetwork(NeuralNetwork):
 		if 'lr' not in args:
 			args['lr'] = 0.0001
 		if 'stateful' not in args:
-			args['stateful'] = True
+			args['stateful'] = False
 
 		#remove any zero-size LSTM/dense layers
 		for arr in [args['LSTM'], args['dense']]:
@@ -39,12 +39,14 @@ class BasicLSTMNetwork(NeuralNetwork):
 
 		features = givenDataset['train'].shape[2]
 		time_steps = givenDataset['train'].shape[1]
-		num_labels = 1
 
 
 		for kind in ['warm', 'train', 'test']:
 			#reformat only the labels first
-			_, labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], features, time_steps, num_labels)
+			labels[kind] = givenLabels[kind].astype(np.float32) #shape of labels is (samples, targets)
+
+			self.num_targets = labels[kind].shape[1]
+			#_, labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], features, time_steps, num_labels)
 			#reformat the dataset for LSTM format of [samples, time steps, features]
 			dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1], givenDataset[kind].shape[2]))
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
@@ -54,27 +56,27 @@ class BasicLSTMNetwork(NeuralNetwork):
 		for i, layer in enumerate(args['LSTM']):
 			ret_seq=(i< (len(args['LSTM'])-1))
 			if i==0:
-				model.add(Bidirectional(SimpleRNN(layer, return_sequences=ret_seq, stateful=args['stateful'] ), batch_input_shape=(args['batch'], time_steps, features) ) )
+				model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features) ) )
 				model.add(Dropout(0.1))
 			else:
-				model.add(Bidirectional(SimpleRNN(layer, return_sequences=ret_seq, stateful=args['stateful'] ) ) )
-			model.add(Activation('relu'))
+				model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful']) )
+			#model.add(Activation('relu'))
 			print("Adding LSTM Layer of size %d." % layer)
 
 		for dense in args['dense']:
 			model.add(Dense(dense))
 			#model.add(Activation('relu'))
 
-		model.add(Dense(1, activation='linear'))
+		model.add(Dense(self.num_targets, activation='linear'))
 
-		model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
+		#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
 
 		opt = Adam(args['lr'])
 
 		model.compile(loss='mean_squared_error', optimizer=opt)
 
 		if not args['stateful']:
-			model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=0, shuffle=False)
+			model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=False)
 		else:
 			for i in range(args['epoch']):
 				model.predict(dataset['warm'], batch_size=args['batch']) #predict so that fitting starts with a state
@@ -84,30 +86,19 @@ class BasicLSTMNetwork(NeuralNetwork):
 		# make predictions
 		self.prediction = {}
 
-		model.predict(dataset['warm'], batch_size=args['batch'])
-		self.prediction['train'] = model.predict(dataset['train'], batch_size=args['batch'])
-		self.prediction['test'] = model.predict(dataset['test'], batch_size=args['batch'])
+		predictionBatch = args['batch']
+
+		model.predict(dataset['warm'], batch_size=predictionBatch)
+		self.prediction['train'] = model.predict(dataset['train'], batch_size=predictionBatch)
+		self.prediction['test'] = model.predict(dataset['test'], batch_size=predictionBatch)
 		model.reset_states()
 
-		self.scorePrediction(self.prediction, labels, 'train')
-		self.scorePrediction(self.prediction, labels, 'test')
+		print(self.prediction['test'].shape)
+
+		self.scorePrediction(self.prediction, labels, 'train', self.num_targets)
+		self.scorePrediction(self.prediction, labels, 'test', self.num_targets)
 
 			
 
 	def predict(self, setType):
 		return self.prediction[setType]
-
-	def scorePrediction(self, prediction, labels, kind):
-		score = {}
-		sign = {}
-		custom = {}
-		R2 = {}
-
-		# calculate root mean squared error
-		score[kind] = self.RMSE(labels[kind], self.prediction[kind][:,0])
-		sign[kind] = self.sign_accuracy(labels[kind], self.prediction[kind][:,0])
-		custom[kind] = self.custom_accuracy(labels[kind], self.prediction[kind][:,0])
-		R2[kind] = self.R2(labels[kind], self.prediction[kind][:,0])
-
-		print("Scores for %s." % kind)
-		print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
