@@ -20,6 +20,9 @@ class DatasetModel(abc.ABC):
 		minVal = np.min(base)
 		maxVal = np.max(arr)
 
+		if maxVal - minVal == 0: #can't normalize if the whole array is zeroes
+			return arr
+
 		return (arr - minVal) / (maxVal - minVal)
 
 	@staticmethod
@@ -31,11 +34,12 @@ class DatasetModel(abc.ABC):
 
 		maxVal = max(abs(maxVal), abs(minVal))
 
-		#make arr [-1;1]
-		arr /= maxVal
-		arr += 1
-		arr /= 2
-		#is within [0;1] and 0.5 is 0
+		if maxVal != 0:
+			#make arr [-1;1]
+			arr /= maxVal
+			arr += 1
+			arr /= 2
+			#is within [0;1] and 0.5 is 0
 
 		return arr
 
