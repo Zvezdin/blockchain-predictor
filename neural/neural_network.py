@@ -73,3 +73,20 @@ class NeuralNetwork(abc.ABC):
 			nullModel += pow(0.5 - labels[i], 2)
 
 		return 1 - sumOfErrors / nullModel
+
+	@staticmethod
+	def scorePrediction(prediction, labels, kind, num_targets):
+		for target in range(num_targets):
+			score = {}
+			sign = {}
+			custom = {}
+			R2 = {}
+
+			# calculate root mean squared error
+			score[kind] = NeuralNetwork.RMSE(labels[kind][:, target], prediction[kind][:,target])
+			sign[kind] = NeuralNetwork.sign_accuracy(labels[kind][:, target], prediction[kind][:,target])
+			custom[kind] = NeuralNetwork.custom_accuracy(labels[kind][:, target], prediction[kind][:,target])
+			R2[kind] = NeuralNetwork.R2(labels[kind][:, target], prediction[kind][:,target])
+
+			print("Scores for %s." % kind)
+			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
