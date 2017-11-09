@@ -15,20 +15,22 @@ sys.path.insert(0, os.path.realpath('neural'))
 from neural_network import NeuralNetwork
 from custom_deep_network import CustomDeepNetwork
 from basic_lstm_network import BasicLSTMNetwork
+from basic_conv_network import BasicConvNetwork
 
 import database_tools as db
 
-globalModels = [CustomDeepNetwork(), BasicLSTMNetwork()]
+globalModels = [CustomDeepNetwork(), BasicLSTMNetwork(), BasicConvNetwork()]
 
 def loadDataset(filename):
 	with open(filename, 'rb') as f:
 		return pickle.load(f)
 
-def randomizeDataset(dataset, labels):
+def randomizeDataset(dataset, labels, dates):
 	permutation = np.random.permutation(labels.shape[0])
 	shuffled_dataset = dataset[permutation,:,:]
 	shuffled_labels = labels[permutation]
-	return shuffled_dataset, shuffled_labels
+	shuffled_dates = dates[permutation]
+	return shuffled_dataset, shuffled_labels, shuffled_dates
 
 def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 
@@ -58,7 +60,7 @@ def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 
 	if shuffle:
 		print("Shuffling train dataset.")
-		dataset['train'], labels['train'] = randomizeDataset(dataset['train'], labels['train'])
+		dataset['train'], labels['train'], dates['train'] = randomizeDataset(dataset['train'], labels['train'], dates['train'])
 
 	if models != None:
 		for model in globalModels:
@@ -92,10 +94,10 @@ def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 		if not quiet:
 			print("Starting simulated trading to evaluate results")
 
-		for pred in predictions:
-			res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
-			if not quiet:
-				print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
+		#for pred in predictions:
+		#	res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
+		#	if not quiet:
+		#		print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
 
 		print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 		for pred in predictions:
@@ -133,12 +135,18 @@ def simulateTrading(prediction, actual, startBalance):
 
 def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'test'):
 	plt.clf() #clear figure
-	plt.plot(dates, actual, label='Price', color='blue')
-	if prediction is not None:
-		plt.plot(dates, prediction, label='Predicted', color='red')
-	plt.x = dates
-	plt.title('Price vs Predicted on %s' % name)
-	plt.legend(loc='upper left')
+
+	nPlots = actual.shape[1]
+
+	for plotN in range(nPlots):
+		plt.subplot(nPlots*100 + 10 + plotN + 1)
+
+		plt.plot(dates, actual[:, plotN], label='Price %d' % plotN, color='blue')
+		if prediction is not None:
+			plt.plot(dates, prediction[:, plotN], label='Predicted %d' % plotN, color='red')
+		plt.x = dates
+		plt.title('Price vs Predicted on %s' % name)
+		plt.legend(loc='upper left')
 	if not save:
 		plt.show()
 	else:
