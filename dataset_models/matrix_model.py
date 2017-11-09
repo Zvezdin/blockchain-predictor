@@ -31,47 +31,43 @@ class MatrixModel(DatasetModel):
 			args['window'] = 24
 		if 'normalize' not in args:
 			args['normalize'] = True
-		if 'price' not in args:
-			try:
-				args['price'] = column_incides['stickPrice']
-			except KeyError:
-				try:
-					args['price'] = column_incides['closePrice']
-				except KeyError:
-					raise #we have no idea which is the price index
+		if 'target' not in args:
+			args['target'] = ['highPrice', 'lowPrice']
 		if 'localNormalize' not in args:
 			args['localNormalize'] = [None]#['stickPrice']
+		if 'defaultNormalization' not in args:
+			args['defaultNormalization'] = 'basic'
 		if 'normalization' not in args:
-			args['normalization'] = {'stickPrice': 'around_zero', 'closePrice': 'around_zero', 'labels': 'around_zero'}
+			args['normalization'] = {'labels': args['defaultNormalization']}
 		if 'binary' not in args:
 			args['binary'] = False
+		if 'blacklistTarget' not in args:
+			args['blacklistTarget'] = True
 
+		#for target in args['target']:
+		targetData = data[args['target']] #get the target columns
+
+		print(targetData)
+
+		if args['blacklistTarget']: #drop the target from the dataset
+			data.drop(args['target'], axis=1, inplace=True)
+		
 		#this method can backfire, so it is disabled temporairly
 			#remove any zero price deltas - we can't predict based on that
 		#data.drop(data[data[data.columns[args['price']]] == 0].index, inplace=True)
-
-		#blacklist = []
-
-		#for prop in properties:
-		#	if prop.columns.contains('stickPrice'):
-		#		blacklist.extend('openPrice', 'closePrice') #if we have stick price, we want to avoid open and close prices in the end dataset.
 
 		print("Head:")
 		print(data.head(5))
 		print("Tail:")
 		print(data.tail(5))
 
-
-		priceIndex = args['price']
-		#stickAlgorithm = args['stick']
-
 		window_size = args['window']
 
 		vals = data.values
 
-		frames = np.ndarray([len(vals)-window_size, window_size, len(properties)], dtype=np.float64)
+		frames = np.ndarray([len(vals)-window_size, window_size, data.shape[1]], dtype=np.float64)
 
-		nextPrices = np.ndarray(frames.shape[0])
+		nextPrices = np.ndarray((frames.shape[0], targetData.shape[1])) #len of samples with targets, num of targets
 
 		dates = []
 		
@@ -85,7 +81,8 @@ class MatrixModel(DatasetModel):
 
 			frames[i] = frame
 
-			nextPrices[i] = vals[i+window_size][priceIndex] #get the price that should be predicted for this frame
+			for colI, col in enumerate(targetData):
+				nextPrices[i, colI] = targetData[col].iloc[i+window_size] #get the price that should be predicted for this frame
 
 			dates.append(allDates.iloc[i+window_size-1])
 
@@ -105,40 +102,47 @@ class MatrixModel(DatasetModel):
 			if col in args['normalization']:
 				normalization.append(args['normalization'][col]) #append the type of normalization for that column index
 			else:
-				normalization.append('around_zero')
+				normalization.append(args['defaultNormalization'])
 
 		if args['normalize']:
 			print("Normalizing...")
-			for x in range(len(properties)):
+			for x in range(data.shape[1]):
 				if x not in localNormalize: #local normalization happens via another way
 					print("Globally normalizing property %d with method %s." % (x, normalization[x]))
 					frames[:, :, x] = self.normalize(frames[:, :, x], normalization[x])
+
+			#if we want the whole set to be globally normalized at once
+			#frames = self.normalize(frames, 'basic')
 
 			#normalize the property and the predicted price locally
 			for x in localNormalize:
 				print("Locally normalizing property %d with method %s." % (x, normalization[x]))
 				for i, frame in enumerate(frames):
-					#find the delta - distance between min and max price to normalize on.
+					#due to recent changes, local normalization of target is not supported
 
-					if x == priceIndex: #normalize the price if it walls with this local property
-						nextPrices[i] = min(max(self.normalize(nextPrices[i], normalization[x], frame[:, x]), 0), 1)
+					#if x == priceIndex: #normalize the price if it walls with this local property
+					#	nextPrices[i] = min(max(self.normalize(nextPrices[i], normalization[x], frame[:, x]), 0), 1)
 
 					if np.min(frame[:, x]) == 0 and np.max(frame[:, x]) == 0:
 						print("Empty dataset at index %i." % i)
 
 					frame[:, x] = self.normalize(frame[:, x], normalization[x])
 
-			if priceIndex not in localNormalize: #if we haven't normalized the labels yet
-				nextPrices = self.normalize(nextPrices, args['normalization']['labels'])
+			#normalize the targets
+			for i in range(nextPrices.shape[1]):
+				nextPrices[:, i] = self.normalize(nextPrices[:, i], args['normalization']['labels'])
 
 		if args['binary']:
 			print("Converting data to binary! May cause issues.")
-			for x in range(len(properties)):
+			for x in range(data.shape[1]):
 				frames[:, :, x] = self.conver_to_binary(frames[:, :, x])
-				nextPrices = self.conver_to_binary(nextPrices)
+			nextPrices = self.conver_to_binary(nextPrices)
 
 		print("Tail frames:")
 		print(frames[len(frames)-3:], frames.shape)
+
+		print("Labels:")
+		print(nextPrices[-15:], nextPrices.shape)
 
 		dates = np.array(dates) #convert to numpy array
 
