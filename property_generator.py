@@ -91,7 +91,15 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 
 	forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
 
+	print("Finished generating property values.")
 
+	print("DEBUG:")
+	for prop in globalProperties:
+		if prop.name == 'accountDistribution':
+			for adr in ['0xb794f5ea0ba39494ce839613fffba74279579268', '0x35da6AbcB08F2b6164fE380BB6c47BD8F2304d55']:
+				adr = adr.lower() #fix capital hex error
+				print("Balance of %s is %d" % (adr, prop.accounts[adr]))
+			print("Max balance is %d." % max(prop.accounts.values()))
 
 	#hold the property names that don't provide children in a list
 	propNames = [prop.name for prop in properties if prop.provides == None]
