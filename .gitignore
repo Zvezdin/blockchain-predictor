@@ -20,3 +20,6 @@ __pycache__/
 
 #others
 todo.txt
+results/*
+*model.png
+debug.txt
