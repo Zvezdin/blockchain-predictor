@@ -92,7 +92,7 @@ def generateLabels(dates, nextPrices, ticks, labelsType):
 			
 			if debug:
 				print("Label for dataframe at %s is %s for prices curr/next : %s and %s" % (date, label, currPrice, nextPrice) )
-			labels.append(label)
+			labels.append([label])
 
 		#make numpy array
 		labels = np.array(labels)
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--filename', type=str, default=None, help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
-	parser.add_argument('--labels', type=str, default='boolean', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
+	parser.add_argument('--labels', type=str, default='full', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
 	parser.add_argument('--ratio', type=str, default='1', help='On how many fragments to split the main dataset. For example, "1:2:3" will create three datasets with sizes proportional to what given.')
 	parser.add_argument('--no-shuffle', dest='shuffle', action="store_false", help="Don't shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=True)
