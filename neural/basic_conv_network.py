@@ -50,31 +50,34 @@ class BasicConvNetwork(NeuralNetwork):
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
 
 		model = Sequential()
-		model.add(Conv2D(32 // sizeModifier, (3, 3), padding='same', input_shape=(time_steps, features, 1)))
-		model.add(Activation('relu'))
-		model.add(Conv2D(32 // sizeModifier, (3, 3)))
-		model.add(Activation('relu'))
-		#model.add(MaxPooling2D(pool_size=(2, 2)))
-		model.add(Dropout(0.25))
+		#model.add(Conv2D(32 // sizeModifier, (3, 3), padding='same'))
+		#model.add(Activation('relu'))
+		#model.add(Conv2D(32 // sizeModifier, (3, 3)))
+		#model.add(Activation('relu'))
+		##model.add(MaxPooling2D(pool_size=(2, 2)))
+		#model.add(Dropout(0.25))
 
-		model.add(Conv2D(64 // sizeModifier, (3, 3), padding='same'))
-		model.add(Activation('relu'))
-		model.add(Conv2D(64 // sizeModifier, (3, 3)))
-		model.add(Activation('relu'))
+		model.add(Conv2D(32 // sizeModifier, (3, 3), padding='same', input_shape=(time_steps, features, 1), name='32'))
+		model.add(Activation('relu', name='ReLU_1'))
+		model.add(Conv2D(64 // sizeModifier, (3, 3), name='64'))
+		model.add(Activation('relu', name='ReLU_2'))
 		#model.add(MaxPooling2D(pool_size=(2, 2)))
-		model.add(Dropout(0.25))
+		model.add(Dropout(0.25, name='0.25'))
 
 		model.add(Flatten())
-		model.add(Dense(512 // sizeModifier))
-		model.add(Activation('relu'))
-		model.add(Dropout(0.5))
-		model.add(Dense(self.num_targets, activation='linear'))
+		model.add(Dense(512 // sizeModifier, name='512'))
+		model.add(Activation('relu', name='ReLU_3'))
+		model.add(Dropout(0.5, name='0.5'))
+		model.add(Dense(self.num_targets, name='1'))
+		model.add(Activation('linear', name='Linear'))
 
 		#opt = Adam(args['lr'])
 
-		opt = rmsprop(lr=0.0001, decay=1e-6)
+		opt = rmsprop(lr=args['lr'], decay=1e-6)
 
 		model.compile(loss='mean_squared_error', optimizer=opt)
+
+		self.plotModel(model)
 
 		model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=False)
 
