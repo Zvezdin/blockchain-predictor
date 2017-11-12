@@ -75,6 +75,8 @@ class BasicLSTMNetwork(NeuralNetwork):
 
 		model.compile(loss='mean_squared_error', optimizer=opt)
 
+		self.plotModel(model)
+
 		if not args['stateful']:
 			model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=False)
 		else:
