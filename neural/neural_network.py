@@ -3,6 +3,7 @@ import abc
 import numpy as np
 import math
 from sklearn.metrics import mean_squared_error
+from keras.utils import plot_model
 
 class NeuralNetwork(abc.ABC):
 
@@ -58,7 +59,10 @@ class NeuralNetwork(abc.ABC):
 		total = 0.0
 
 		for i in range(len(labels)):
-			total += abs(labels[i] - prediction[i]) / min(prediction[i], labels[i])
+			minDel = min(prediction[i], labels[i])
+
+			if minDel != 0:
+				total += abs(labels[i] - prediction[i]) / minDel
 
 		total /= len(labels)
 
@@ -90,3 +94,7 @@ class NeuralNetwork(abc.ABC):
 
 			print("Scores for %s." % kind)
 			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
+
+	@staticmethod
+	def plotModel(model):
+		plot_model(model, to_file='model.png')
