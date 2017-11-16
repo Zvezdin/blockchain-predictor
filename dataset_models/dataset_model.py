@@ -36,7 +36,7 @@ class DatasetModel(abc.ABC):
 
 		if maxVal != 0:
 			#make arr [-1;1]
-			arr /= maxVal
+			arr = arr / maxVal
 			arr += 1
 			arr /= 2
 			#is within [0;1] and 0.5 is 0
