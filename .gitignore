@@ -23,3 +23,7 @@ todo.txt
 results/*
 *model.png
 debug.txt
+materials/
+*paper.pdf
+readme.pdf
+debug*.txt
