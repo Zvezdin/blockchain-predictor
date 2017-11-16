@@ -46,7 +46,7 @@ def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 
 		if trim:
 			if not quiet:
-				print("Trimming all datasets.")
+				print("Trimming %s dataset." % kind)
 			targetLen -= targetLen % modelArgs['batch']
 
 		dataset[kind] = rawDataset[i]['dataset'][:targetLen]
@@ -141,11 +141,11 @@ def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'te
 	for plotN in range(nPlots):
 		plt.subplot(nPlots*100 + 10 + plotN + 1)
 
-		plt.plot(dates, actual[:, plotN], label='Price %d' % plotN, color='blue')
+		plt.plot(dates, actual[:, plotN], label='Target %d' % plotN, color='blue')
 		if prediction is not None:
 			plt.plot(dates, prediction[:, plotN], label='Predicted %d' % plotN, color='red')
 		plt.x = dates
-		plt.title('Price vs Predicted on %s' % name)
+		plt.title('Target vs Predicted on %s' % name)
 		plt.legend(loc='upper left')
 	if not save:
 		plt.show()
