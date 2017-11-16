@@ -11,6 +11,7 @@ from sklearn.metrics import mean_squared_error
 class BasicConvNetwork(NeuralNetwork):
 	def __init__(self):
 		self.name="CONV"
+		self.invertLabels = True
 
 	def train(self, givenDataset, givenLabels, args = {}):
 		dataset = {}
@@ -32,6 +33,8 @@ class BasicConvNetwork(NeuralNetwork):
 			args['batch'] = 16
 		if 'lr' not in args:
 			args['lr'] = 0.0001
+		if 'kernel' not in args:
+			args['kernel'] = 3
 
 		#remove any zero-size LSTM/dense layers
 		for arr in [args['CONV'], args['dense']]:
@@ -44,29 +47,31 @@ class BasicConvNetwork(NeuralNetwork):
 		for kind in ['warm', 'train', 'test']:
 			#reformat only the labels first
 			labels[kind] = givenLabels[kind].astype(np.float32) #shape of labels is (samples, targets)
+			if self.invertLabels:
+				labels[kind] = 1-labels[kind]
 
 			self.num_targets = labels[kind].shape[1]
 			dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1], givenDataset[kind].shape[2], 1))
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
 
 		model = Sequential()
-		#model.add(Conv2D(32 // sizeModifier, (3, 3), padding='same'))
-		#model.add(Activation('relu'))
-		#model.add(Conv2D(32 // sizeModifier, (3, 3)))
-		#model.add(Activation('relu'))
+		#model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', input_shape=(time_steps, features, 1), name='32_1'))
+		#model.add(Activation('relu', name='ReLU_1'))
+		#model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), name='32_2'))
+		#model.add(Activation('relu', name='ReLU_2'))
 		##model.add(MaxPooling2D(pool_size=(2, 2)))
-		#model.add(Dropout(0.25))
+		#model.add(Dropout(0.25, name='0.25_1'))
 
-		model.add(Conv2D(32 // sizeModifier, (3, 3), padding='same', input_shape=(time_steps, features, 1), name='32'))
-		model.add(Activation('relu', name='ReLU_1'))
-		model.add(Conv2D(64 // sizeModifier, (3, 3), name='64'))
-		model.add(Activation('relu', name='ReLU_2'))
+		model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', name='32_3', input_shape=(time_steps, features, 1)))
+		model.add(Activation('relu', name='ReLU_3'))
+		model.add(Conv2D(64 // sizeModifier, (args['kernel'], args['kernel']), name='64'))
+		model.add(Activation('relu', name='ReLU_4'))
 		#model.add(MaxPooling2D(pool_size=(2, 2)))
-		model.add(Dropout(0.25, name='0.25'))
+		model.add(Dropout(0.25, name='0.25_2'))
 
 		model.add(Flatten())
 		model.add(Dense(512 // sizeModifier, name='512'))
-		model.add(Activation('relu', name='ReLU_3'))
+		model.add(Activation('relu', name='ReLU_5'))
 		model.add(Dropout(0.5, name='0.5'))
 		model.add(Dense(self.num_targets, name='1'))
 		model.add(Activation('linear', name='Linear'))
@@ -95,4 +100,6 @@ class BasicConvNetwork(NeuralNetwork):
 			
 
 	def predict(self, setType):
+		if self.invertLabels:
+			return 1-self.prediction[setType]
 		return self.prediction[setType]

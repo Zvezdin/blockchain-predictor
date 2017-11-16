@@ -65,7 +65,7 @@ class CustomDeepNetwork(NeuralNetwork):
 
 		self.plotModel(model)
 
-		model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=True)
+		model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=True)
 
 		# make predictions
 		self.prediction = {}
