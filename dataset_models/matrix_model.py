@@ -32,17 +32,19 @@ class MatrixModel(DatasetModel):
 		if 'normalize' not in args:
 			args['normalize'] = True
 		if 'target' not in args:
-			args['target'] = ['highPrice', 'lowPrice']
+			args['target'] = ['highPrice_rel']
 		if 'localNormalize' not in args:
 			args['localNormalize'] = [None]#['stickPrice']
 		if 'defaultNormalization' not in args:
-			args['defaultNormalization'] = 'basic'
+			args['defaultNormalization'] = 'around_zero'
 		if 'normalization' not in args:
 			args['normalization'] = {'labels': args['defaultNormalization']}
 		if 'binary' not in args:
 			args['binary'] = False
 		if 'blacklistTarget' not in args:
-			args['blacklistTarget'] = True
+			args['blacklistTarget'] = False
+		if 'invert' not in args:
+			args['invert'] = False
 
 		#for target in args['target']:
 		targetData = data[args['target']] #get the target columns
@@ -145,6 +147,9 @@ class MatrixModel(DatasetModel):
 		print(nextPrices[-15:], nextPrices.shape)
 
 		dates = np.array(dates) #convert to numpy array
+
+		if args['invert']:
+			frames = 1-frames
 
 		return (frames, dates, nextPrices)
 
