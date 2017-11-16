@@ -10,19 +10,19 @@ from dataset_model import DatasetModel
 from matrix_model import MatrixModel
 
 def test_frame():
-	dates = np.array([dt(2017,1,1), dt(2017,1,2), dt(2017,1,3), dt(2017,1,4), dt(2019,3,1)])
+	dates = np.array([dt(2017,1,1), dt(2017,1,2), dt(2017,1,3), dt(2017,1,4), dt(2019,3,1), dt(2019,3,7)])
 
-	a = pd.DataFrame({'a': np.array([1,2,3,4,5]), 'date': dates}, index=[10,20,30,40,70])
-	b = pd.DataFrame({'b': np.array([5,4,3,2,1]), 'date': dates})
-	c = pd.DataFrame({'c': np.array([2300e+10, 4700e+10, 9800e+9, 4900e+10, 5690e+10]), 'date': dates})
-	d = pd.DataFrame({'d': np.array([1000e+11, 1, -10, 50e+5, 0.03]), 'date': dates})
-	e = pd.DataFrame({'e': np.array([-56, -6, -19, -145, 0]), 'date': dates})
+	a = pd.DataFrame({'a': np.array([1,2,3,4,5,5]), 'date': dates}, index=[10,20,30,40,70,80])
+	b = pd.DataFrame({'b': np.array([5,4,3,2,1,1]), 'date': dates})
+	c = pd.DataFrame({'c': np.array([2300e+10, 4700e+10, 9800e+9, 4900e+10, 5690e+10, 5690e+10]), 'date': dates})
+	d = pd.DataFrame({'d': np.array([1000e+11, 1, -10, 50e+5, 0.03, 0.03]), 'date': dates})
+	e = pd.DataFrame({'e': np.array([-56, -6, -19, -145, 0, 0]), 'date': dates})
 
 	properties = [a,b,c,d,e]
 
 	model = MatrixModel()
 
-	res, resDates, _ = model.generate(properties, {'normalize': False, 'window': 3})
+	res, resDates, _ = model.generate(properties, {'normalize': False, 'window': 3, 'blacklistTarget': False, 'target': 'a'})
 
 	print("Got result from model:")
 	print(res, resDates)
@@ -41,26 +41,24 @@ def test_frame():
 								[4, 2, 4900e+10, 50e+5, -145],
 								[5, 1, 5690e+10, 0.03, 0]])
 
-	expectedDates = dates[2:]
+	expectedDates = dates[2:-1]
 
 	print("We're expecting:")
 	print(expectation, expectedDates)
-
-	print(expectedDates, resDates)
 
 	assert np.array_equal(res, expectation) and np.array_equal(expectedDates, resDates)
 
 def test_regularization():
 	model = MatrixModel()
 
-	dates = np.array([dt(2017,1,1), dt(2017,1,2), dt(2017,1,3), dt(2017,1,4), dt(2019,3,1)])
+	dates = np.array([dt(2017,1,1), dt(2017,1,2), dt(2017,1,3), dt(2017,1,4), dt(2019,3,1), dt(2019,3,7)])
 
-	a = pd.DataFrame({'a': np.array([1,2,3,4,5]), 'date': dates}, index=[10,20,30,40,70])
-	b = pd.DataFrame({'b': np.array([5e+20, 4e+20, 3e+20, 2e+20, 1e+20]), 'date': dates})
+	a = pd.DataFrame({'a': np.array([1,2,3,4,5,5]), 'date': dates}, index=[10,20,30,40,70,80])
+	b = pd.DataFrame({'b': np.array([5e+20, 4e+20, 3e+20, 2e+20, 1e+20, 1e+20]), 'date': dates})
 
 	properties = [a,b]
 
-	res, resDates, _ = model.generate(properties, {'normalize': True, 'window': 3})
+	res, resDates, _ = model.generate(properties, {'normalize': True, 'defaultNormalization': 'basic', 'window': 3, 'blacklistTarget': False, 'target': 'a'})
 
 	expectation = np.ndarray((3, 3, 2))
 
@@ -77,7 +75,7 @@ def test_regularization():
 								[1, 0]])
 							
 
-	expectedDates = dates[2:]
+	expectedDates = dates[2:-1]
 
 	print("We're expecting:")
 	print(expectation, expectedDates)
