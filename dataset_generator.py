@@ -5,6 +5,7 @@ import time
 import dateutil.parser
 import argparse
 import pickle
+import io
 
 import pandas as pd
 from arctic.date import CLOSED_OPEN
@@ -48,7 +49,12 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 
 	#load the needed properties
 	for prop in propertyNames:
-		properties.append(db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN))
+		data = db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN)
+
+		if prop == 'accountDistribution':
+			print("Running numpy array Arctic workaround...")
+			data[prop] = data[prop].apply(lambda x: np.loadtxt(io.BytesIO(str.encode(x))))
+		properties.append(data)
 
 	for prop in properties:
 		if len(properties[0]) != len(prop):

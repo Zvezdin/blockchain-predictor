@@ -1,8 +1,11 @@
 from property import Property
 
 import math
+import pickle
+import io
 
 import numpy as np
+
 
 class PropertyAccountDistribution(Property):
 	def __init__(self):
@@ -16,9 +19,6 @@ class PropertyAccountDistribution(Property):
 		self.subPropertyCount = 3 #vol to, vol from, tx count
 
 		self.scalingFunction = self.scaleLog #or self.noScaling
-
-		#this property does not have a value. It only provides child properties.
-		self.provides = [self.name + str(i) for i in range(self.tickCount * self.subPropertyCount)]
 
 	def processTick(self, data):
 		txs = data['tx']
@@ -79,7 +79,12 @@ class PropertyAccountDistribution(Property):
 				res[1][fromI] += val#value from
 				res[2][fromI] += 1 #tx count
 
-		return res.reshape((res.shape[0] * res.shape[1])) #flatten for storage
+		output = io.BytesIO()
+		np.savetxt(output, res)
+
+		x = output.getvalue()
+
+		return x.decode() 
 	
 	def noScaling(self, x):
 		return x
