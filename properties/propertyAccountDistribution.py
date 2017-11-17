@@ -3,6 +3,7 @@ from property import Property
 import math
 import pickle
 import io
+import codecs
 
 import numpy as np
 
@@ -79,12 +80,9 @@ class PropertyAccountDistribution(Property):
 				res[1][fromI] += val#value from
 				res[2][fromI] += 1 #tx count
 
-		output = io.BytesIO()
-		np.savetxt(output, res)
+		x = codecs.encode(pickle.dumps(res, -1), "base64").decode()
 
-		x = output.getvalue()
-
-		return x.decode() 
+		return x
 	
 	def noScaling(self, x):
 		return x
