@@ -5,6 +5,7 @@ from datetime import timezone, timedelta, datetime as dt
 import time
 import dateutil.parser
 import argparse
+import traceback
 
 import pandas as pd
 from arctic.date import DateRange
@@ -115,8 +116,8 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 	for prop in propNames:
 		try:
 			saveProperty(prop, values[prop])
-		except:
-			print("Failed saving property!", sys.exc_info()[0])
+		except ValueError as e:
+			print("Failed saving property!", e, traceback.format_exc())
 
 	for prop in properties:
 		if relative and not prop.isRelative: #turn that property into relative values

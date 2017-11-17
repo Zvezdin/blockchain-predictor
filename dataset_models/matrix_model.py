@@ -24,7 +24,7 @@ class MatrixModel(DatasetModel):
 		if 'defaultNormalization' not in args:
 			args['defaultNormalization'] = 'basic'
 		if 'normalization' not in args:
-			args['normalization'] = {}
+			args['normalization'] = {'highPrice_rel': 'around_zero'}
 		if 'binary' not in args:
 			args['binary'] = False
 		if 'blacklistTarget' not in args:
@@ -50,7 +50,7 @@ class MatrixModel(DatasetModel):
 
 			if type(v[0]) == np.ndarray: #matrix model doesn't support multi dim value arrays. Flatten them.
 				print("Warning: Matrix model does not supoort property %s. It will be flattened." % propName)
-				v = np.array([x.flatten() for x in v])
+				v = np.array([x.flatten(order='C') for x in v])
 
 			if len(v.shape) == 1:
 				v = np.reshape(v, (v.shape[0], 1))
