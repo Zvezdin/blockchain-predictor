@@ -8,10 +8,10 @@ import codecs
 import numpy as np
 
 
-class PropertyAccountDistribution(Property):
+class PropertyAccountBalanceDistribution(Property):
 	def __init__(self):
 		super().__init__()
-		self.name = "accountDistribution"
+		self.name = "accountBalanceDistribution"
 		self.requires = ['tx']
 		self.requiresHistoricalData  = True
 		self.accounts = {}

@@ -16,7 +16,7 @@ import database_tools as db
 sys.path.insert(0, os.path.realpath('properties'))
 
 from property import Property
-from propertyAccountDistribution import PropertyAccountDistribution
+from propertyAccountBalanceDistribution import PropertyAccountBalanceDistribution
 from propertyBlockDifficulty import PropertyBlockDifficulty
 from propertyBlockSize import PropertyBlockSize
 from propertyClosePrice import PropertyClosePrice
@@ -39,7 +39,7 @@ from propertyVolumeTo import PropertyVolumeTo
 chunkStore = db.getChunkstore()
 
 
-globalProperties = [PropertyAccountDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
+globalProperties = [PropertyAccountBalanceDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
 PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(),
 PropertyStickPrice(), PropertyTransactionCount(), PropertyUniqueAccounts(), PropertyVolumeFrom(), PropertyVolumeTo()]
 
