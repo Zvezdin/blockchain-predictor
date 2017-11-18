@@ -1,6 +1,5 @@
 from property import Property
 
-import math
 import pickle
 import io
 import codecs
@@ -83,11 +82,3 @@ class PropertyAccountBalanceDistribution(Property):
 		x = codecs.encode(pickle.dumps(res, -1), "base64").decode()
 
 		return x
-	
-	def noScaling(self, x):
-		return x
-
-	def scaleLog(self, x):
-		if x>=1:
-			return math.log(x, 10)
-		return 0

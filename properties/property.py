@@ -1,5 +1,7 @@
 import abc
 
+import math
+
 class Property(abc.ABC):
 	"""A property class with a unified interface on the different data properties and their generation"""
 
@@ -54,3 +56,11 @@ class Property(abc.ABC):
 
 	def __str__(self):
 		return "Property "+self.name
+
+	def noScaling(self, x):
+		return x
+
+	def scaleLog(self, x):
+		if x>=1:
+			return math.log(x, 10)
+		return 0
