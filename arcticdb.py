@@ -46,6 +46,30 @@ def convertTimestamp(x):
 		raise ValueError('Unsupported timestamp format in given data %s.' % x.keys())
 	x['date'] = dt.utcfromtimestamp(x.pop(key, None)) #remove the old key, convert to date and replace it with 'date'
 
+def parseInt(data):
+	if type(data) == dict:
+		for key in data: #parse to int
+				if type(data[key]) == str:
+					try:
+						base = 10
+						if data[key].startswith('0x'):
+							base = 16
+
+						data[key] = int(data[key], base=base)
+					except ValueError:
+						pass
+	elif type(data) == list:
+		for i, val in enumerate(data):
+			if type(val) == str:
+				try:
+					base = 10
+					if val.startswith('0x'):
+						base = 16
+
+					data[i] = int(val, base=base)
+				except ValueError:
+					pass
+
 def processRawCourseData(data):
 
 	start = time.time()
@@ -82,7 +106,7 @@ def callDataDownloaderBlockchain(start, count):
 def downloadBlockchain(start = 0, targetBlock = None):
 	currentBlock = getLatestBlock()
 
-	if(currentBlock < 0): currentBlock = start
+	if currentBlock < 0: currentBlock = start
 
 	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
 
@@ -93,7 +117,7 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 	attempts = 0
 
-	while currentBlock < (targetBlock if targetBlock != None else 4146000): #todo determine the end of the blockchain automatically
+	while currentBlock < (targetBlock if targetBlock != None else 4520000): #todo determine the end of the blockchain automatically
 		print('Calling js to download '+str(series)+' blocks from '+str(currentBlock))
 		callDataDownloaderBlockchain(currentBlock, series)
 		filename = getBlockchainFile(currentBlock, currentBlock+series-1)
@@ -113,11 +137,14 @@ def downloadBlockchain(start = 0, targetBlock = None):
 		attempts = 0
 		os.remove(filename)
 
-		blocks, transactions = processRawBlockchainData(data)
+		blocks, transactions, receipts = processRawBlockchainData(data)
 
 		db.saveData(chunkStore, db.dbKeys['block'], blocks, db.blockChunkSize) #save block data
 		if len(transactions) > 0 :
 			db.saveData(chunkStore, db.dbKeys['tx'], transactions, db.txChunkSize) #save tx,t oo
+		if len(receipts) > 0 :
+			db.saveData(chunkStore, db.dbKeys['receipt'], receipts, db.receiptChunkSize) #save tx,t oo
+		
 
 		currentBlock += series
 
@@ -126,18 +153,32 @@ def getBlockchainFile(arg1, arg2): #the resulting file from the download script 
 
 def processRawBlockchainData(data):
 	transactions = []
+	receipts = []
 	for block in data:
 		convertTimestamp(block) #transfer date string to date object, used to filter and manage the dt
+
 		for tx in block['transactions']:
 			tx['date'] = block['date']
 			transactions.append(tx)
+		if 'receipts' in block:
+			for receipt in block['receipts']:
+				receipt['date'] = block['date']
+
+				#workaround because Arctic is allergic to arrays
+				receipt['logs'] = db.encodeObject(receipt['logs'])
+
+				receipts.append(receipt)
+
 		block.pop('transactions', None) #remove the transactions from blockcdata - we work with them separately
-	return data, transactions
+		block.pop('receipts', None)
+	return data, transactions, receipts
 
 def getLatestBlock():
 	try:
 		tmp = db.getLatestRow(chunkStore, db.dbKeys['block']) #get a dataframe with only the latest row
-		return tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
+		num =  tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
+		
+		return num
 	except:
 		return -1
 
@@ -145,7 +186,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser = argparse.ArgumentParser(description="Module that downloads and stores blockchain and course data.")
 	parser.add_argument('--course', dest='course', action="store_true", help="Downloads and saves or upgrades historical course data.")
 	parser.add_argument('--blockchain', dest='blockchain', action="store_true", help="Downloads and saves or upgrades blockchain data.")
-	parser.add_argument('--start', type=int, default=None, help='From which block to start downloading.')
+	parser.add_argument('--start', type=int, default=0, help='From which block to start downloading.')
 	parser.add_argument('--end', type=int, default=None, help='Until which block to download.')
 	parser.set_defaults(course=False)
 	parser.set_defaults(blockchain=False)
