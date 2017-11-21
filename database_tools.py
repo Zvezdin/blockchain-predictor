@@ -2,6 +2,8 @@ import sys
 from datetime import timezone, datetime as dt
 import time
 import argparse
+import pickle
+import codecs
 
 import pandas as pd
 from arctic import Arctic
@@ -9,12 +11,13 @@ from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
-masterKey="_all"
+masterKey="_all_receipt"
 
-dbKeys = {'tick': '', 'tx': '', 'block': ''}
+dbKeys = {'tick': '', 'tx': '', 'block': '', 'receipt': ''}
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
+receiptChunkSize = 'D'
 courseChunkSize = 'M'
 
 storeKey = 'chunkstore'
@@ -150,6 +153,13 @@ def getMasterInterval(lib, keys, start=None, end=None):
 
 	return (start, end)
 #reads all data in memory. Eats all the ram.
+
+def encodeObject(obj):
+	return codecs.encode(pickle.dumps(obj, -1), "base64").decode()
+
+def decodeObject(encoded):
+	return pickle.loads(codecs.decode(encoded.encode(), "base64"))
+
 def readAllData(lib, key):
 	start = time.time()
 	try:
