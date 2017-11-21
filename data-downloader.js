@@ -13,7 +13,9 @@ var debug = true;
 
 var datadir = 'data/'
 
-const maxAsyncRequests = 2;
+var contractFile = datadir + 'contracts.json'
+
+const maxAsyncRequests = 3;
 
 var requestedBlocks = 0;
 
@@ -148,6 +150,8 @@ function downloadBlockchain(startBlock, expectedBlocks){
 
 	requestedBlocks = 0; //the amount of blocks we have requested to receive
 
+	var contractPublishing = [] //array of tx hashes, where a contract has been published
+
 	console.log("Downloading blocks...");
 
 	sw.start();
@@ -159,7 +163,9 @@ function downloadBlockchain(startBlock, expectedBlocks){
 			if(block == null){
 				console.error("Received empty block!");
 			} else {
-				cleanBlock(block);
+				var contracts = cleanBlock(block)
+				contractPublishing.push.apply(contractPublishing, contracts);
+
 				blockDict[block.number] = block;
 			}
 
@@ -169,7 +175,18 @@ function downloadBlockchain(startBlock, expectedBlocks){
 				if(!validateBlocks(blockDict, startBlock, expectedBlocks, handler)) return;
 
 				console.log("Received all blocks at "+(receivedBlocks / sw.elapsed.seconds)+"bl/s!");
-				processBlocks(blockDict, startBlock);
+
+				getContractTransactions(contractPublishing, blockDict, function(error, contractTx){
+					blockNs = Object.keys(contractTx); //inject the contract transactions in the appropriate blocks
+					for(var i=0; i<blockNs.length; i++){
+						blockDict[blockNs[i]].receipts = contractTx[blockNs[i]]
+					}
+
+					var processed = processBlocks(blockDict, startBlock);
+
+					saveAsJSON(processed)
+				});
+
 			} else if(requestedBlocks < expectedBlocks){
 				//get the next block
 				getNextBlock(startBlock, handler);
@@ -184,7 +201,130 @@ function downloadBlockchain(startBlock, expectedBlocks){
 	sw.stop();
 }
 
+function getContractTransactions(publishing, blocks, callback){
+	contracts = getContracts();
+	receipts = {}
+	receivedPublish = 0;
+
+	var handler2 = function(txs){
+		for(var i=0; i<txs.length; i++){
+			receipt = cleanReceipt(txs[i])
+			if(receipts[receipt.blockNumber] == undefined){
+				receipts[receipt.blockNumber] = []
+			}
+
+			receipts[receipt.blockNumber].push(receipt);
+		}
+		
+		saveContracts(contracts);
+
+		callback(undefined, receipts);
+	}
+
+	var handler = function(res){
+		for(var i=0; i<res.length; i++){
+			receipt = cleanReceipt(res[i])
+
+			if(receipts[receipt.blockNumber] == undefined){
+				receipts[receipt.blockNumber] = []
+			}
+
+			receipts[receipt.blockNumber].push(receipt);
+
+			contracts[receipt.contractAddress] = true;
+		}
+
+		numbers = Object.keys(blocks).sort();
+
+		txToRequest = []
+
+		for(i=0; i<numbers.length; i++){
+			block = blocks[numbers[i]];
+
+			for(j=0; j<block.transactions.length; j++){
+				if(contracts[block.transactions[j].to] || contracts[block.transactions[j].from]){ //if the tx is from/to a contract
+					txToRequest.push(block.transactions[j].hash);
+				}
+			}
+		}
+
+		console.log("Requesting receipts:", txToRequest.length);
+
+		if(txToRequest.length > 0)
+			getAll(web3.eth.getTransactionReceipt, txToRequest, handler2);
+		else
+			callback(undefined, receipts);
+	}
+
+	if(publishing.length > 0)
+		getAll(web3.eth.getTransactionReceipt, publishing, handler);
+	else
+		callback(undefined, receipts);
+}
+
+function getAll(web3Function, inputs, callback){
+	results = []
+	received = 0;
+	expected = inputs.length
+	requested = 0
+
+	var getNext = function(hdlr){
+		web3Function(inputs[requested], hdlr);
+
+		requested++;
+	}
+
+	var handler = function(err, res){
+		if(err){
+			console.error(err);
+			getNext(handler); //there was problem, try again
+		}
+		else {
+			if(res == null){
+				console.error("Received empty result!");
+			} else {
+				results.push(res)
+			}
+
+			received++;
+
+			if(received >= expected){
+				callback(results);
+
+			} else if(requested < expected){
+				//get the next item
+				getNext(handler);
+			}
+		}
+	}
+
+	for(i = 0; i<maxAsyncRequests*2 && i<expected; i++){
+		getNext(handler);
+	}
+}
+
+function cleanReceipt(receipt){
+	delete receipt.blockHash;
+	delete receipt.logsBloom;
+	delete receipt.root;
+	//delete receipt.transactionHash; we need that to make connection between receipts and txs
+	
+	for(i=0; i<receipt.logs.length; i++){
+		log = receipt.logs[i];
+
+		delete log.transactionHash;
+		delete log.transactionIndex;
+		delete log.blockHash;
+		delete log.logIndex;
+	}
+
+	return receipt;
+}
+
 function cleanBlock(block){ //this function removes many useless for our cases fields in the block and txs
+	//it returns the tx hashes, where contracts were deployed
+	contractHashes = [];
+
 	delete block.extraData;
 	delete block.hash;
 	delete block.logsBloom;
@@ -204,14 +344,20 @@ function cleanBlock(block){ //this function removes many useless for our cases f
 
 		delete tx.blockHash;
 		delete tx.blockNumber;
-		delete tx.hash;
+		//delete tx.hash; we shouldn't delete that, as later we can't identify the transaction
 		delete tx.nonce;
 		delete tx.v;
 		delete tx.r;
 		delete tx.s;
 		delete tx.input;
 		delete tx.transactionIndex;
+
+		if(tx.to == null){ //if this is a contract creation
+			contractHashes.push(tx.hash);
+		}
 	}
+
+	return contractHashes;
 }
 
 function getBlock(blockN, handler){
@@ -222,8 +368,6 @@ function getNextBlock(startBlock, handler){
 	getBlock(startBlock+requestedBlocks, handler);
 	requestedBlocks++;
 }
-
-var blockchain = [];
 
 function validateBlocks(dict, first, len, handler){ //checks to see if all blocks are reseived accordingly and requests the missing ones
 	for(bl = 0; bl < len; bl++){
@@ -238,7 +382,8 @@ function validateBlocks(dict, first, len, handler){ //checks to see if all block
 }
 
 function processBlocks(dict, first){
-	sw.start();
+	var blockchain = [];
+
 	var block;
 	for(i = first;; i++){
 		block = dict[i];
@@ -247,16 +392,20 @@ function processBlocks(dict, first){
 		else break;
 	}
 
-	blockDict = {};
-
 	console.log("Successfully loaded "+blockchain.length+" blocks");
 	console.log("First block is "+blockchain[0].number+" with " + blockchain[0].transactions.length+" transactions!");
 	console.log("Last block is "+blockchain[blockchain.length-1].number+" with " + blockchain[blockchain.length-1].transactions.length+" transactions!");
 
-	var file = JSON.stringify(blockchain);
-	var filename = datadir+"blocks "+blockchain[0].number+"-"+blockchain[blockchain.length-1].number+".json"
+	return blockchain;
+}
+
+function saveAsJSON(data){
+	sw.start();
+
+	var file = JSON.stringify(data);
+	var filename = datadir+"blocks "+data[0].number+"-"+data[data.length-1].number+".json"
 	console.log("Data to save is "+file.length+" bytes long.");
-	fs.writeFile(filename, JSON.stringify(blockchain), function(err) {
+	fs.writeFile(filename, JSON.stringify(data), function(err) {
 		if(err) {
 			console.log(err);
 			sw.stop();
@@ -268,12 +417,68 @@ function processBlocks(dict, first){
 	sw.stop();
 }
 
+function getContracts(){
+	contracts = {};
+
+	try{
+		contracts = JSON.parse(fs.readFileSync(contractFile));
+	} catch(e){}
+
+	return contracts;
+}
+
+function saveContracts(contracts){
+	fs.writeFileSync(contractFile, JSON.stringify(contracts));
+}
+
 function compareBlocks(a, b){
 	if (a.timestamp < b.timestamp)
 		return -1;
-	if (a.last_nom > b.last_nom)
+	if (a.timestamp > b.timestamp)
 		return 1;
 	return 0;
+}
+
+function compareReceipts(a, b){
+	if (a.blockNumber < b.blockNumber)
+		return -1;
+	if (a.blockNumber > b.blockNumber)
+		return 1;
+	return 0;
+}
+
+function test(){
+	initBlockchain()
+
+	received = 0
+	expected = 10000
+
+	var handler2 = function(err, res){
+		received++
+
+		if (err){
+			console.error("res is null! Error:");
+			console.error(err);
+			console.log("Progress", received, expected);
+		}
+
+		delete res.blockHash;
+
+		var curr = (new Date).getTime();
+
+		if(received == expected){
+			console.log("Time it took was", (curr-start))
+		}
+	}
+
+	console.log(getContracts())
+
+	var start = (new Date).getTime();
+	for(var i=0; i<expected; i++){
+		web3.eth.getTransactionReceipt("0x674d990c9a298fd995f02ef4b923211f3e4208828014417ba45f8d467657ee38", handler2);
+	}
+
+	//console.log(web3.eth.getTransactionReceipt("0x674d990c9a298fd995f02ef4b923211f3e4208828014417ba45f8d467657ee38"));
 }
 
 function printHelp(){
@@ -304,6 +509,9 @@ function processArgs(){
 
 				if(!initBlockchain()) return;
 				downloadBlockchain(start, count);
+			}
+			else if(arg == 'test'){
+				test()
 			}
 		}
 	}
