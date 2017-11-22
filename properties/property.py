@@ -60,7 +60,7 @@ class Property(abc.ABC):
 	def noScaling(self, x):
 		return x
 
-	def scaleLog(self, x):
+	def scaleLog(self, x, base=10):
 		if x>=1:
-			return math.log(x, 10)
+			return math.log(x, base)
 		return 0
