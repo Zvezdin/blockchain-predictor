@@ -17,8 +17,9 @@ class PropertyAccountNumberDistribution(Property):
 		self.features = ['balance', 'lastSeen']
 		self.max = [None, None]
 		self.scaling = [self.noScaling, self.noScaling] #or self.scaleLog
+		self.lastTimestamp = 0 #will be updated
 
-		self.actualMax = [None, None]
+		self.actualMax = self.max
 
 	def processTick(self, data):
 		txs = data['tx']
@@ -41,7 +42,7 @@ class PropertyAccountNumberDistribution(Property):
 
 			time = tx.date.value // 10**9 #EPOCH time
 
-			lastTime = max(lastTime, time)
+			self.lastTimestamp = max(self.lastTimestamp, time)
 
 			if sender not in self.accounts:
 				self.accounts[sender] = np.zeros(len(self.features))
@@ -72,27 +73,36 @@ class PropertyAccountNumberDistribution(Property):
 		for i, maxVal in enumerate(self.max):
 			if maxVal is None: #if no max has been given, calculate it
 				self.actualMax[i] = self.getMax(i)
-			else: #get the given max
-				self.actualMax[i] = maxVal
+
+		self.beforeDistribution() #here we can place logic that is supposed to execute before the distribution process
 
 		#we have updated our accounts, let's create the double distribution.
 		#by assigning two group numbers to each one of them
 
 		for acc in self.accounts: #this iteration is the slowest part of the process
-			res[self.getGroup1(acc, 0)][self.getGroup2(acc, 1)] += 1 #add that account to the correct distribution location
+			res[self.getGroup0(acc)][self.getGroup1(acc)] += 1 #add that account to the correct distribution location
 
+		#serialize, because of databset limitations
 		serialized = codecs.encode(pickle.dumps(res, -1), "base64").decode()
 
 		return serialized
 
-def getGroup1(self, acc, index):
-	return min(int((self.scaling[index](self.accounts[acc][index] + self.offset[index]) / self.scaling[index](self.actualMax[index])) * self.groupCount[index]), self.groupCount[index]-1)
+def getGroupByVal(self, val, index): #our default grouping
+	return min(int((self.scaling[index](val) / self.scaling[index](self.actualMax[index])) * self.groupCount[index]), self.groupCount[index]-1)
 
-def getGroup2(self, acc, index):
-	return self.getGroup1(acc, index)
+def getGroup0(self, acc): #wrappers for our default grouping. Feel free to override if needed
+	return self.getGroupByVal(self.accounts[acc][0], 0)
+
+def getGroup1(self, acc):
+	return self.getGroupByVal(self.accounts[acc][1], 1)
 
 def getMax(self, index):
 	return max(self.accounts.values(), key=lambda x: x[index])[index]
 
 def getMin(self, index):
 	return min(self.accounts.values(), key=lambda x: x[index])[index]
+
+#logic that is supposed to execute before the distribution process
+#feel free to override
+def beforeDistribution(self):
+	pass
