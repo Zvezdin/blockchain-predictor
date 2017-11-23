@@ -11,14 +11,15 @@ from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
-masterKey="_all_receipt"
+masterKey="_all_logs"
 
-dbKeys = {'tick': '', 'tx': '', 'block': '', 'receipt': ''}
+dbKeys = {'tick': '', 'tx': '', 'block': '', 'logs': ''}
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
 receiptChunkSize = 'D'
 courseChunkSize = 'M'
+logsChunkSize = 'D'
 
 storeKey = 'chunkstore'
 
@@ -191,15 +192,21 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--peek', dest='peek', action="store_true", help="Print the first and last rows of a symbol.")
 	parser.add_argument('--read', dest='read', action="store_true", help="Load and print the whole symbol.")
 	parser.add_argument('--remove', dest='remove', action="store_true", help="Remove a certain symbol from the database.")
+	parser.add_argument('--removeBlockchain', dest='removeBlockchain', action="store_true", help="Remove all downloaded raw blockchain data.")
 	parser.set_defaults(list=False)
 	parser.set_defaults(peek=False)
 	parser.set_defaults(read=False)
 	parser.set_defaults(remove=False)
+	parser.set_defaults(removeBlockchain=False)
 
 
 	args, _ = parser.parse_known_args()
 
-	if args.key == None or args.list:
+	if args.removeBlockchain:
+			for key in dbKeys:
+				removeDB(getChunkstore(), dbKeys[key])
+
+	elif args.key == None or args.list:
 		print("Available symbols: ", getChunkstore().list_symbols())
 	else:
 		if args.peek:
