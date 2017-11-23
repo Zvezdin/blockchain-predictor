@@ -19,6 +19,7 @@ import database_tools as db
 blockSeries = 10000
 attemptsThreshold = 10
 
+logsSeparate = True
 
 priceDataFile = 'data/cryptocompare_price_data.json'
 dataDownloaderScript = '--max-old-space-size=4076 data-downloader.js'
@@ -137,14 +138,13 @@ def downloadBlockchain(start = 0, targetBlock = None):
 		attempts = 0
 		os.remove(filename)
 
-		blocks, transactions, receipts = processRawBlockchainData(data)
+		blocks, transactions, logs = processRawBlockchainData(data)
 
-		db.saveData(chunkStore, db.dbKeys['block'], blocks, db.blockChunkSize) #save block data
 		if len(transactions) > 0 :
-			db.saveData(chunkStore, db.dbKeys['tx'], transactions, db.txChunkSize) #save tx,t oo
-		if len(receipts) > 0 :
-			db.saveData(chunkStore, db.dbKeys['receipt'], receipts, db.receiptChunkSize) #save tx,t oo
-		
+			db.saveData(chunkStore, db.dbKeys['tx'], transactions, db.txChunkSize) #save tx
+		if logsSeparate and len(logs) > 0:
+			db.saveData(chunkStore, db.dbKeys['logs'], logs, db.logsChunkSize) #save tx
+		db.saveData(chunkStore, db.dbKeys['block'], blocks, db.blockChunkSize) #save block data		
 
 		currentBlock += series
 
@@ -153,25 +153,38 @@ def getBlockchainFile(arg1, arg2): #the resulting file from the download script 
 
 def processRawBlockchainData(data):
 	transactions = []
-	receipts = []
+	logs = []
 	for block in data:
 		convertTimestamp(block) #transfer date string to date object, used to filter and manage the dt
 
 		for tx in block['transactions']:
 			tx['date'] = block['date']
+			
+			if 'logs' in tx:
+
+				if logsSeparate:
+					logSection = tx['logs']# list of logs for this transaction
+					tx.pop('logs', None)#remove it from the tx
+
+					for log in logSection:
+						topics = log['topics'] #let's unpack the topics list in different columns
+						log.pop('topics', None) #remove the list
+						for i in range(4): #in Ethereum, the topics can be maximum 4.
+							if i < len(topics):
+								log['topic'+str(i)] = topics[i]
+							else:
+								log['topic'+str(i)] = None
+						log['date'] = block['date']
+
+						logs.append(log)
+				else:
+					#workaround because Arctic is allergic to arrays
+					encoded = db.encodeObject(tx['logs'])
+					tx['logs'] = encoded
 			transactions.append(tx)
-		if 'receipts' in block:
-			for receipt in block['receipts']:
-				receipt['date'] = block['date']
-
-				#workaround because Arctic is allergic to arrays
-				receipt['logs'] = db.encodeObject(receipt['logs'])
-
-				receipts.append(receipt)
 
 		block.pop('transactions', None) #remove the transactions from blockcdata - we work with them separately
-		block.pop('receipts', None)
-	return data, transactions, receipts
+	return data, transactions, logs
 
 def getLatestBlock():
 	try:
