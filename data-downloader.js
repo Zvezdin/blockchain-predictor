@@ -199,18 +199,6 @@ function downloadBlockchain(startBlock, expectedBlocks){
 					
 					saveAsJSON(processed)
 				});
-
-				/*getContractTransactions(contractPublishing, blockDict, function(error, contractTx){
-					blockNs = Object.keys(contractTx); //inject the contract transactions in the appropriate blocks
-					for(var i=0; i<blockNs.length; i++){
-						blockDict[blockNs[i]].receipts = contractTx[blockNs[i]]
-					}
-
-					var processed = processBlocks(blockDict, startBlock);
-
-					saveAsJSON(processed)
-				});*/
-
 			} else if(requestedBlocks < expectedBlocks){
 				//get the next block
 				getNextBlock(startBlock, handler);
@@ -367,7 +355,6 @@ function cleanReceipt(receipt){
 	delete receipt.blockHash;
 	delete receipt.logsBloom;
 	delete receipt.root;
-	//delete receipt.transactionHash; we need that to make connection between receipts and txs
 	
 	for(i=0; i<receipt.logs.length; i++){
 		log = receipt.logs[i];
@@ -537,8 +524,6 @@ function testAsyncRequests(){
 	for(var i=0; i<expected; i++){
 		web3.eth.getTransactionReceipt("0x674d990c9a298fd995f02ef4b923211f3e4208828014417ba45f8d467657ee38", handler2);
 	}
-
-	//console.log(web3.eth.getTransactionReceipt("0x674d990c9a298fd995f02ef4b923211f3e4208828014417ba45f8d467657ee38"));
 }
 
 //this function is to make quick functionality test - not to be confused with unit testing.
