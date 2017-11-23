@@ -176,7 +176,31 @@ function downloadBlockchain(startBlock, expectedBlocks){
 
 				console.log("Received all blocks at "+(receivedBlocks / sw.elapsed.seconds)+"bl/s!");
 
-				getContractTransactions(contractPublishing, blockDict, function(error, contractTx){
+				getContractLogs(startBlock, startBlock + expectedBlocks - 1, function(err, logs){
+					var pushed = 0;
+
+					for(var i=0; i<logs.length; i++){
+						var block = blockDict[logs[i].blockNumber];
+						for(var j=0; j<block.transactions.length; j++){
+							if(block.transactions[j].hash == logs[i].hash){
+								if(block.transactions[j].logs == undefined) block.transactions[j].logs = []
+								
+								block.transactions[j].logs.push(logs[i]);
+								pushed ++;
+							}
+						}
+					}
+
+					if (pushed != logs.length){
+						console.error("Error! Unable to assign all logs to their transactions. Assigned x out of y", pushed, logs.length);
+					}
+
+					var processed = processBlocks(blockDict, startBlock);
+					
+					saveAsJSON(processed)
+				});
+
+				/*getContractTransactions(contractPublishing, blockDict, function(error, contractTx){
 					blockNs = Object.keys(contractTx); //inject the contract transactions in the appropriate blocks
 					for(var i=0; i<blockNs.length; i++){
 						blockDict[blockNs[i]].receipts = contractTx[blockNs[i]]
@@ -185,7 +209,7 @@ function downloadBlockchain(startBlock, expectedBlocks){
 					var processed = processBlocks(blockDict, startBlock);
 
 					saveAsJSON(processed)
-				});
+				});*/
 
 			} else if(requestedBlocks < expectedBlocks){
 				//get the next block
@@ -201,6 +225,33 @@ function downloadBlockchain(startBlock, expectedBlocks){
 	sw.stop();
 }
 
+//will get all logs from contracts within [start, end] block interval
+function getContractLogs(start, end, callback){
+	var filter = web3.eth.filter({'fromBlock': start, 'toBlock': end});
+	
+	var handlerCB = function(err, res){
+		if(err){
+			console.error(err);
+			callback(err, null);
+		}
+
+		for(var i=0; i<res.length; i++){ //clean the logs
+			cleanLog(res[i]);
+		}
+
+		console.log("Received logs with length ", res.length);
+
+		callback(null, res);
+	}
+
+	filter.get(handlerCB)
+
+	console.log("Getting logs for blocks from/to", start, end);
+}
+
+//This method first finds all published contracts from the publishing transactions
+//It scans the downloaded blocks to look or transactions where these contracts participate and returns those TX's receipts.
+//This is really slow and doesn't show contracts that are published by contracts. We no longer use this method, but get contract logs directly.
 function getContractTransactions(publishing, blocks, callback){
 	contracts = getContracts();
 	receipts = {}
@@ -303,6 +354,15 @@ function getAll(web3Function, inputs, callback){
 	}
 }
 
+function cleanLog(log){
+	log.hash = log.transactionHash; //rename to just hash, so it falls in line with 'hash' in a transaction
+	delete log.transactionHash;
+
+	delete log.transactionIndex;
+	delete log.blockHash;
+	delete log.logIndex;
+}
+
 function cleanReceipt(receipt){
 	delete receipt.blockHash;
 	delete receipt.logsBloom;
@@ -312,13 +372,20 @@ function cleanReceipt(receipt){
 	for(i=0; i<receipt.logs.length; i++){
 		log = receipt.logs[i];
 
-		delete log.transactionHash;
-		delete log.transactionIndex;
-		delete log.blockHash;
-		delete log.logIndex;
+		cleanLog(log);
 	}
 
 	return receipt;
+}
+
+function cleanTransaction(tx){
+	delete tx.blockHash;
+	delete tx.nonce;
+	delete tx.v;
+	delete tx.r;
+	delete tx.s;
+	delete tx.input;
+	delete tx.transactionIndex;
 }
 
 function cleanBlock(block){ //this function removes many useless for our cases fields in the block and txs
@@ -342,15 +409,7 @@ function cleanBlock(block){ //this function removes many useless for our cases f
 	for(i=0; i<block.transactions.length; i++){
 		tx = block.transactions[i];
 
-		delete tx.blockHash;
-		delete tx.blockNumber;
-		//delete tx.hash; we shouldn't delete that, as later we can't identify the transaction
-		delete tx.nonce;
-		delete tx.v;
-		delete tx.r;
-		delete tx.s;
-		delete tx.input;
-		delete tx.transactionIndex;
+		cleanTransaction(tx);
 
 		if(tx.to == null){ //if this is a contract creation
 			contractHashes.push(tx.hash);
@@ -447,7 +506,8 @@ function compareReceipts(a, b){
 	return 0;
 }
 
-function test(){
+//this function is to make quick functionality test - not to be confused with unit testing.
+function testAsyncRequests(){
 	initBlockchain()
 
 	received = 0
@@ -481,6 +541,32 @@ function test(){
 	//console.log(web3.eth.getTransactionReceipt("0x674d990c9a298fd995f02ef4b923211f3e4208828014417ba45f8d467657ee38"));
 }
 
+//this function is to make quick functionality test - not to be confused with unit testing.
+function testFilters(){
+	initBlockchain();
+
+	contracts = getContracts();
+
+	var filter = web3.eth.filter({'fromBlock': 3500000, 'toBlock': 3510000});
+
+	var handlerCB = function(err, res){
+		if(err) console.error(err);
+
+		console.log("Received results with length ", res.length);
+
+		for(var i=0; i<res.length; i++){
+			if(!contracts[res[i].address]){
+				console.error("Addess", res[i].address, "is not in our contracts db!!!");
+			}
+		}
+
+		console.log(res[0])
+		console.log(res[res.length-1])
+	}
+
+	filter.get(handlerCB)
+}
+
 function printHelp(){
 	console.log("A tool to download cryptocurrency course and blockchain data and save them as a json");
 	console.log("Arguments:");
@@ -511,7 +597,7 @@ function processArgs(){
 				downloadBlockchain(start, count);
 			}
 			else if(arg == 'test'){
-				test()
+				testFilters()
 			}
 		}
 	}
