@@ -52,7 +52,7 @@ debug = False
 def generateProperties(selectedProperties = None, start = None, end = None, relative = False):
 	values = {} #a dict that holds an array of the returned values for each property
 
-	dub = {}
+	dub = {} #temp dict to make sure, that we won't have dubbed requirements
 
 	requirements = []
 
@@ -174,7 +174,7 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 	data = {}#[next(iterators[i]) for i in range(len(iterators))]
 
 	for key in iterators: # load the first chunks for all data
-		data[key] = next(iterators[key])
+		data[key] = decodeRawData(next(iterators[key]))
 
 	startTime = time.time()
 
@@ -202,7 +202,7 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 					print("Loading new chunk for key" , key, tickData[key].head(2), tickData[key].tail(2), data[key].head(2), data[key].tail(2), currentStart, currentEnd)
 					print("Processing of the chunk took "+str(time.time() - startTime)+"s.")
 					startTime = time.time()
-					data[key] = next(iterators[key]) #load another data chunk and append it
+					data[key] = decodeRawData(next(iterators[key])) #load another data chunk and append it
 					newPart = subsetByDate(data[key], currentStart, currentEnd)
 					tickData[key] = pd.concat([tickData[key], newPart])
 				if debug:
@@ -210,6 +210,11 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 					print(tickData[key].tail(2))
 
 			callback(tickData, currentEnd)
+
+def decodeRawData(data):
+	if 'logs' in data: #the logs in our raw data are encoded via pickle, because of Arctic limitations
+		data['logs'] = data['logs'].apply(lambda x: db.decodeObject(x))
+	return data
 
 def loadDataForTick(lib, start, end):
 	return [db.loadData(lib, key, start, end, True) for key in db.dbKeys]
