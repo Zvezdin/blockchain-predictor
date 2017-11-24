@@ -16,13 +16,14 @@ sys.path.insert(0, os.path.realpath('dataset_models'))
 from dataset_model import DatasetModel
 
 from matrix_model import MatrixModel
+from stacked_model import StackedModel
 import database_tools as db
 
 
 
 chunkStore = db.getChunkstore()
 
-models = [MatrixModel()]
+models = [MatrixModel(), StackedModel()]
 
 save = True
 debug = False
@@ -36,7 +37,7 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 
 	#get the model instance
 	for mod in models:
-		if mod.name is modelName:
+		if mod.name == modelName:
 			model = mod
 
 	if model is None:
@@ -52,7 +53,7 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 	for prop in propertyNames:
 		data = db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN)
 
-		if prop == 'accountDistribution':
+		if prop == 'balanceDistribution':
 			print("Running numpy array Arctic workaround for prop %s..." % prop)
 			data[prop] = data[prop].apply(lambda x: pickle.loads(codecs.decode(x.encode(), "base64")))
 		properties.append(data)
