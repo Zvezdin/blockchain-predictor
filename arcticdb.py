@@ -20,6 +20,7 @@ blockSeries = 10000
 attemptsThreshold = 10
 
 logsSeparate = True
+parseToInt = False
 
 priceDataFile = 'data/cryptocompare_price_data.json'
 dataDownloaderScript = '--max-old-space-size=4076 data-downloader.js'
@@ -176,14 +177,23 @@ def processRawBlockchainData(data):
 								log['topic'+str(i)] = None
 						log['date'] = block['date']
 
+						if parseToInt:
+							parseInt(log)
+
 						logs.append(log)
 				else:
 					#workaround because Arctic is allergic to arrays
 					encoded = db.encodeObject(tx['logs'])
 					tx['logs'] = encoded
+
+			if parseToInt:
+				parseInt(tx)
 			transactions.append(tx)
 
 		block.pop('transactions', None) #remove the transactions from blockcdata - we work with them separately
+
+		if parseToInt:
+			parseInt(block)
 	return data, transactions, logs
 
 def getLatestBlock():
