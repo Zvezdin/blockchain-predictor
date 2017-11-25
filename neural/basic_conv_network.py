@@ -40,10 +40,6 @@ class BasicConvNetwork(NeuralNetwork):
 		for arr in [args['CONV'], args['dense']]:
 			while 0 in arr: arr.remove(0)
 
-		features = givenDataset['train'].shape[2]
-		time_steps = givenDataset['train'].shape[1]
-
-
 		for kind in ['warm', 'train', 'test']:
 			#reformat only the labels first
 			labels[kind] = givenLabels[kind].astype(np.float32) #shape of labels is (samples, targets)
@@ -51,8 +47,21 @@ class BasicConvNetwork(NeuralNetwork):
 				labels[kind] = 1-labels[kind]
 
 			self.num_targets = labels[kind].shape[1]
-			dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1], givenDataset[kind].shape[2], 1))
+
+			if len(givenDataset[kind].shape) == 3:
+				#reshape from N,time_steps,features to N,time_steps,features,1
+				dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1], givenDataset[kind].shape[2], 1))
+			elif len(givenDataset[kind].shape) == 4:
+				#reshape from N,time_steps,height,width to N,height,width,time_steps
+				dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[2], givenDataset[kind].shape[3], givenDataset[kind].shape[1]))
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
+
+		height = dataset['train'].shape[1]
+		width = dataset['train'].shape[2]
+		try:
+			channels = dataset['train'].shape[3]
+		except IndexError:
+			channels = 1
 
 		model = Sequential()
 		#model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', input_shape=(time_steps, features, 1), name='32_1'))
@@ -62,7 +71,7 @@ class BasicConvNetwork(NeuralNetwork):
 		##model.add(MaxPooling2D(pool_size=(2, 2)))
 		#model.add(Dropout(0.25, name='0.25_1'))
 
-		model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', name='32_3', input_shape=(time_steps, features, 1)))
+		model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', name='32_3', input_shape=(height, width, channels)))
 		model.add(Activation('relu', name='ReLU_3'))
 		model.add(Conv2D(64 // sizeModifier, (args['kernel'], args['kernel']), name='64'))
 		model.add(Activation('relu', name='ReLU_4'))
