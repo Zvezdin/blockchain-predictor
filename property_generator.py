@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.realpath('properties'))
 from property import Property
 from propertyAccountBalanceDistribution import PropertyAccountBalanceDistribution
 from propertyAccountNumberDistribution import PropertyAccountNumberDistribution
+from propertyBalanceLastSeenDistribution import PropertyBalanceLastSeenDistribution
 from propertyBlockDifficulty import PropertyBlockDifficulty
 from propertyBlockSize import PropertyBlockSize
 from propertyClosePrice import PropertyClosePrice
@@ -40,7 +41,7 @@ from propertyVolumeTo import PropertyVolumeTo
 chunkStore = db.getChunkstore()
 
 
-globalProperties = [PropertyAccountBalanceDistribution(), PropertyAccountNumberDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
+globalProperties = [PropertyAccountBalanceDistribution(), PropertyBalanceLastSeenDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
 PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(),
 PropertyStickPrice(), PropertyTransactionCount(), PropertyUniqueAccounts(), PropertyVolumeFrom(), PropertyVolumeTo()]
 
