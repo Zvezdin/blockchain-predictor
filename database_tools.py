@@ -11,7 +11,9 @@ from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
-masterKey="_all_logs"
+masterKey="_all"
+
+#other keys include _all_logs and _all_receipts
 
 dbKeys = {'tick': '', 'tx': '', 'block': '', 'logs': ''}
 
@@ -30,6 +32,13 @@ maxDBStorage = 1024 #1024 GB max size of the database
 def updateKeys(masterKey):
 	for key in dbKeys:
 		dbKeys[key] = key+masterKey
+
+	keys = getChunkstore().list_symbols()
+
+	for pair in list(dbKeys.items()):
+		if pair[1] not in keys: #if the value (aka datastore key) is not in db
+			dbKeys.pop(pair[0], None) #remove the key, as it is not in the db
+			print("Removing key %s from dbKeys list due to unavailability" % key)
 
 #Methods for db management
 
@@ -104,7 +113,7 @@ def saveData(lib, key, data, chunkSize):
 	print("Saving the data took "+str(time.time() - start)+" seconds")
 
 def getDataFrame(data):
-	return pd.DataFrame(data)
+	return pd.DataFrame(data) #object in order to save large ints
 
 #Methods for reading
 
