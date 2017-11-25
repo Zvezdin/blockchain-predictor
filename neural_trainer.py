@@ -161,7 +161,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--args', type=str, help="A list of arguments to be passed on to the models. In the format key1=value1,key2=value2.1;value2.2")
 	parser.add_argument('--quiet', dest='quiet', action="store_true", help="Do not plot graphs, but save them as images.")
 	parser.set_defaults(quiet=False)
-	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Don't shuffle the generated dataset and labels.")
+	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=False)
 	parser.add_argument('--trim-batch', dest='trim', action="store_true", help="Trim each dataset so that its length is divisible by the batch size.")
 	parser.set_defaults(trim=False)
