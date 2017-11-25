@@ -46,3 +46,10 @@ class DatasetModel(abc.ABC):
 	@staticmethod
 	def conver_to_binary(arr):
 		return (arr >= 0.5).astype(np.float32)
+
+	@staticmethod
+	def normalize(arr, method, base = None):
+		if method == 'basic':
+			return DatasetModel.basic_normalization(arr, base)
+		elif method == 'around_zero':
+			return DatasetModel.around_zero_normalization(arr, base)

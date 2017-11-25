@@ -14,7 +14,7 @@ class MatrixModel(DatasetModel):
 
 		#argument defaults
 		if 'window' not in args:
-			args['window'] = 24
+			args['window'] = 104
 		if 'normalize' not in args:
 			args['normalize'] = True
 		if 'target' not in args:
@@ -28,7 +28,7 @@ class MatrixModel(DatasetModel):
 		if 'binary' not in args:
 			args['binary'] = False
 		if 'blacklistTarget' not in args:
-			args['blacklistTarget'] = False
+			args['blacklistTarget'] = True
 		if 'invert' not in args:
 			args['invert'] = False
 
@@ -129,9 +129,3 @@ class MatrixModel(DatasetModel):
 			frames = 1-frames
 
 		return (frames, dates, nextPrices)
-
-	def normalize(self, arr, method, base = None):
-		if method == 'basic':
-			return self.basic_normalization(arr, base)
-		elif method == 'around_zero':
-			return self.around_zero_normalization(arr, base)

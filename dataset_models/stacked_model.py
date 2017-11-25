@@ -184,9 +184,3 @@ class StackedModel(DatasetModel):
 		new[:, :-1] = arr
 
 		return new
-
-	def normalize(self, arr, method, base = None):
-		if method == 'basic':
-			return self.basic_normalization(arr, base)
-		elif method == 'around_zero':
-			return self.around_zero_normalization(arr, base)
