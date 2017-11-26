@@ -93,9 +93,11 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 			else:
 				values[prop.name].append({'date': date, prop.name: val})
 
-	forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
-
-	print("Finished generating property values.")
+	try:
+		forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
+		print("Finished generating property values.")
+	except KeyboardInterrupt:
+		print("Got interrupted, saving the current progress...")
 
 	#print("DEBUG:")
 	#for prop in globalProperties:
