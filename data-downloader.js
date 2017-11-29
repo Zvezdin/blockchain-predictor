@@ -19,6 +19,8 @@ const maxAsyncRequests = 3;
 
 var requestedBlocks = 0;
 
+const saveSpace = true;
+
 function initBlockchain(){
 	if (typeof web3 !== 'undefined') {
 		web3 = new Web3(web3.currentProvider);
@@ -349,6 +351,11 @@ function cleanLog(log){
 	delete log.transactionIndex;
 	delete log.blockHash;
 	delete log.logIndex;
+
+	if(saveSpace){
+		log.dataLen = log.data.length; //keep at least some info about the data.
+		delete log.data; //these are the non-indexed log arguments. They can be arbitrary in length, and so take up a lot of space.
+	}
 }
 
 function cleanReceipt(receipt){
