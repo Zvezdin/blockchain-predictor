@@ -119,7 +119,7 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 	attempts = 0
 
-	while currentBlock < (targetBlock if targetBlock != None else 4520000): #todo determine the end of the blockchain automatically
+	while currentBlock < (targetBlock if targetBlock != None else 4500000): #todo determine the end of the blockchain automatically
 		print('Calling js to download '+str(series)+' blocks from '+str(currentBlock))
 		callDataDownloaderBlockchain(currentBlock, series)
 		filename = getBlockchainFile(currentBlock, currentBlock+series-1)
@@ -141,10 +141,10 @@ def downloadBlockchain(start = 0, targetBlock = None):
 
 		blocks, transactions, logs = processRawBlockchainData(data)
 
+		if logsSeparate and len(logs) > 0:
+			db.saveData(chunkStore, db.dbKeys['logs'], logs, db.logsChunkSize) #save the logs
 		if len(transactions) > 0 :
 			db.saveData(chunkStore, db.dbKeys['tx'], transactions, db.txChunkSize) #save tx
-		if logsSeparate and len(logs) > 0:
-			db.saveData(chunkStore, db.dbKeys['logs'], logs, db.logsChunkSize) #save tx
 		db.saveData(chunkStore, db.dbKeys['block'], blocks, db.blockChunkSize) #save block data		
 
 		currentBlock += series
