@@ -33,21 +33,24 @@ const int group1 = 10;
 
 typedef std::array<std::array<int, group0>, group1> result;
 
-typedef std::array<char, 43> acc;
+typedef boost::multiprecision::mpz_int largeInt;
+typedef boost::multiprecision::mpf_float largeFloat;
+
+const int accLen = 43;
+
+typedef std::array<char, accLen> acc;
+
 typedef int featType;
 typedef std::array<featType, 2> feat;
 typedef const char* RawKey;
 typedef std::map<acc, feat> accMap;
 
-typedef boost::multiprecision::mpz_int largeInt;
-typedef boost::multiprecision::mpf_float largeFloat;
-
 PYBIND11_MAKE_OPAQUE(accMap);
 
 namespace py = pybind11;
 
-const int max0 = 1000000;
-const int max1 = 2592000;
+const featType max0(1000000);
+const featType max1(2592000);
 
 //It is bad practice to include .cpp files, but this is needed for our binding needs.
 #include <propertyAccountNumberDistribution.cpp>
