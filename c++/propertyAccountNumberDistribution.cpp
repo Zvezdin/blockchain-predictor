@@ -1,6 +1,6 @@
 accMap accounts;
 
-result createDistribution(accMap accounts, int lastTimestamp){
+result createDistribution(int lastTimestamp){
 	result res = {}; //will init whole array to 0.
 
 	const double smax0 = log10(max0), smax1 = log10(max1); //pre-scale our maximum values
@@ -9,8 +9,8 @@ result createDistribution(accMap accounts, int lastTimestamp){
 		int arg0 = std::min(int((log10(it.second[0]) / smax0) * group0), group0-1);
 		int arg1 = std::min(int((log10(std::abs(it.second[1] - lastTimestamp)) / smax1) * group1), group1-1);
 
-		std::cout<<arg0<<arg1<<std::endl;
-		std::cout<<(it.second[1] - lastTimestamp)<<((it.second[1] - lastTimestamp) / smax1)<<(((it.second[1] - lastTimestamp) / smax1) * group1)<<std::endl;
+		//std::cout<<arg0<<arg1<<std::endl;
+		//std::cout<<(it.second[1] - lastTimestamp)<<((it.second[1] - lastTimestamp) / smax1)<<(((it.second[1] - lastTimestamp) / smax1) * group1)<<std::endl;
 
 		res[arg0][arg1] ++;
 	}
@@ -19,27 +19,29 @@ result createDistribution(accMap accounts, int lastTimestamp){
 }
 
 result pythonDistribution(int lastTimestamp){
-	return createDistribution(accounts, lastTimestamp);
+	return createDistribution(lastTimestamp);
 }
 
-void fakeData(accMap accounts){
-	acc acc = {"0xb794f5ea0ba39494ce839613fffba74279579268"};
+void fakeData(){
+	acc account = {"0xb794f5ea0ba39494ce839613fffba74279579268"};
 	
-	for(int i=0; i<1000000; i++){
+	for(int i=0; i<10000000; i++){
 		int num = i;
 		for(int j=20; num>0; j++){
-			acc[j] = 48 + num % 10;
+			account[j] = 48 + num % 10;
 			num /= 10;
 		}
 
-		accounts[acc] = {i,i};
+		accounts[account] = {i,i};
 	}
+
+    std::cout<<"Length of resulting fake data is "<<accounts.size()<<std::endl;
 }
 
 acc transformKey(const char* rawKey){
 	acc key = {0};
 
-	std::copy(rawKey, rawKey+43, std::begin(key));
+	std::copy(rawKey, rawKey+accLen, std::begin(key));
 
 	return key;
 }
@@ -48,7 +50,7 @@ acc transformKey(std::string rawKey){
 	acc key = {0};
 
 	const char* cstr = rawKey.c_str();
-	std::copy(cstr, cstr+43, std::begin(key));
+	std::copy(cstr, cstr+accLen, std::begin(key));
 
 	return key;
 }
@@ -104,32 +106,31 @@ int getLen(){
 }
 
 void test(){
-	createDistribution(accounts, 100);
-}
+    fakeData();
 
-int test2(char* a){
-	std::array<char, 43> test;// = a;
-	std::copy(a, a+43, std::begin(test));
+    std::cout<<"length of fake data is "<<getLen()<<std::endl;
 
-	int sum = 0;
+	auto start = std::chrono::high_resolution_clock::now();
 
-	for (int i=0; i<43; i++){
-		sum += test[i];
-	}
+	auto res = createDistribution(1000);
 
-	return sum;
-}
+	auto end = std::chrono::high_resolution_clock::now();
 
-int test3(std::string a){
-	const char *test = a.c_str();// = a;
-	
-	int sum = 0;
+	std::chrono::duration<double> elapsed = end - start;
 
-	for (int i=0; i<43; i++){
-		sum += test[i];
-	}
+	std::cout << "Elapsed time: " << elapsed.count() << " s\n";
 
-	return sum;
+    int sum = 0;
+
+    for(int i=0; i<group0; i++){
+        for(int j=0; j<group1; j++){
+            sum += res[i][j];
+        }
+    }
+
+    if(sum != getLen()){
+        std::cout<<"Error- did not distribute all accounts!"<<std::endl;
+    }
 }
 
 void test4(const char* numStr){
@@ -157,22 +158,6 @@ void test4(const char* numStr){
 	}
 }
 
-int main(){
-	fakeData(accounts);
-
-	auto start = std::chrono::high_resolution_clock::now();
-
-	createDistribution(accounts, 5);
-
-	auto end = std::chrono::high_resolution_clock::now();
-
-	std::chrono::duration<double> elapsed = end - start;
-
-	std::cout << "Elapsed time: " << elapsed.count() << " s\n";
-
-	return 0;
-}
-
 PYBIND11_MODULE(example, m) {
 	m.doc() = "pybind11 bindings of a c++ implementation of an account number distribution";
 	
@@ -182,8 +167,6 @@ PYBIND11_MODULE(example, m) {
 	m.def("getStr", &getItemStr, "");
 	m.def("len", &getLen, "");
 	m.def("test", &test, "");
-	m.def("test2", &test2, "");
-	m.def("test3", &test3, "");
 	m.def("test4", &test4, "");
 	m.def("createDistribution", &pythonDistribution, "");
 }
