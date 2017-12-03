@@ -34,7 +34,8 @@ const int group1 = 10;
 typedef std::array<std::array<int, group0>, group1> result;
 
 typedef std::array<char, 43> acc;
-typedef std::array<int, 2> feat;
+typedef int featType;
+typedef std::array<featType, 2> feat;
 typedef const char* RawKey;
 typedef std::map<acc, feat> accMap;
 
@@ -86,26 +87,67 @@ void fakeData(accMap accounts){
 	}
 }
 
-acc transformKey(RawKey rawKey){
-	acc key;
+acc transformKey(const char* rawKey){
+	acc key = {0};
 
-	//in the case of an input str:
-
-	//const char* cstr = rawKey.c_str();
-	//std::copy(cstr, cstr+43, std::begin(key));
-
-	//with char* input
 	std::copy(rawKey, rawKey+43, std::begin(key));
 
 	return key;
 }
 
-void setItem(RawKey rawKey, feat val){
-	accounts[transformKey(rawKey)] = val;
+acc transformKey(std::string rawKey){
+	acc key = {0};
+
+	const char* cstr = rawKey.c_str();
+	std::copy(cstr, cstr+43, std::begin(key));
+
+	return key;
 }
 
-feat getItem(RawKey rawKey){
-	return accounts[transformKey(rawKey)];
+void setItem(RawKey rawKey, short index, featType val, bool add, bool subtract, bool stayPositive){
+	featType* currVal = &accounts[transformKey(rawKey)][index];
+
+	if(add){
+		*currVal += val;
+	}
+	else if(subtract){
+		if(stayPositive && *currVal < val){
+			*currVal = 0; 
+		} else {
+			*currVal -= val;
+		}
+	}
+	else {
+		*currVal = val;
+	}
+}
+
+//for values that are small enough to fit within an int
+void setItemInt(RawKey rawKey, short index, int val, bool add, bool subtract, bool stayPositive){
+	std::cout<<"Setting with int"<<std::endl;
+	
+	setItem(rawKey, index, val, add, subtract, stayPositive);
+}
+
+void setItemStr(RawKey rawKey, short index, char* val, bool add, bool subtract, bool stayPositive){
+	//not needed when featType is int
+	//setItem(rawKey, index, featType(val), add, subtract, stayPositive);
+}
+
+
+
+featType getItem(RawKey rawKey, short index){
+	return accounts[transformKey(rawKey)][index];
+}
+
+int getItemInt(RawKey rawKey, short index){
+	return static_cast<int>(getItem(rawKey, index));
+}
+
+char* getItemStr(RawKey rawKey, short index){
+	//return getItem(rawKey, index).str();
+	//doesn't work with integer featType
+	return NULL;
 }
 
 int getLen(){
@@ -161,6 +203,8 @@ void test4(const char* numStr){
 		//boost::multiprecision::acos(a);
 
 		boost::multiprecision::log10(static_cast<largeFloat>(a));
+
+		a.str();
 	}
 }
 
@@ -181,26 +225,16 @@ int main(){
 }
 
 PYBIND11_MODULE(example, m) {
-	m.doc() = "pybind11 example plugin"; // optional module docstring
-
-	m.def("set", &setItem, "");
-	m.def("get", &getItem, "");
+	m.doc() = "pybind11 bindings of a c++ implementation of an account number distribution";
+	
+	m.def("setInt", &setItemInt, "");
+	m.def("setStr", &setItemStr, "");
+	m.def("getInt", &getItemInt, "");
+	m.def("getStr", &getItemStr, "");
 	m.def("len", &getLen, "");
 	m.def("test", &test, "");
 	m.def("test2", &test2, "");
 	m.def("test3", &test3, "");
 	m.def("test4", &test4, "");
 	m.def("createDistribution", &pythonDistribution, "");
-
-	py::class_<accMap>(m, "accMap")
-		.def(py::init<>())
-		.def("__len__", [](const accMap &v) { return v.size(); })
-		//.def("__getitem__", &accMap::operator[])
-		.def("__setitem__", [](accMap &v, RawKey key, const feat val) { setItem(key, val); })
-		.def("__getitem__", [](accMap &v, RawKey key) { return getItem(key); })
-		.def("__iter__", [](accMap &v) {
-			return py::make_iterator(v.begin(), v.end());
-		}, py::keep_alive<0, 1>()); /* Keep container alive while iterator is used */
-
-	//py::bind_map<accMap>(m, "defaultAccMap");
 }
