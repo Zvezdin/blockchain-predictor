@@ -36,11 +36,13 @@ typedef std::array<std::array<int, group0>, group1> result;
 typedef boost::multiprecision::mpz_int largeInt;
 typedef boost::multiprecision::mpf_float largeFloat;
 
+typedef largeFloat castFloat;
+
 const int accLen = 43;
 
 typedef std::array<char, accLen> acc;
 
-typedef int featType;
+typedef largeInt featType;
 typedef std::array<featType, 2> feat;
 typedef const char* RawKey;
 typedef std::map<acc, feat> accMap;

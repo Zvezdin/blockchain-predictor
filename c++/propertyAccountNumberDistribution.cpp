@@ -3,11 +3,11 @@ accMap accounts;
 result createDistribution(int lastTimestamp){
 	result res = {}; //will init whole array to 0.
 
-	const double smax0 = log10(max0), smax1 = log10(max1); //pre-scale our maximum values
+	const double smax0 = log10(static_cast<float>(max0)), smax1 = log10(static_cast<float>(max1)); //pre-scale our maximum values
 
 	for (auto const &it : accounts){
-		int arg0 = std::min(int((log10(it.second[0]) / smax0) * group0), group0-1);
-		int arg1 = std::min(int((log10(std::abs(it.second[1] - lastTimestamp)) / smax1) * group1), group1-1);
+		int arg0 = std::min(static_cast<int>((boost::multiprecision::log10(static_cast<castFloat>(it.second[0])) / smax0) * group0), group0-1);
+		int arg1 = std::min(static_cast<int>((boost::multiprecision::log10(static_cast<castFloat>(boost::multiprecision::abs(it.second[1] - lastTimestamp) ) ) / smax1) * group1), group1-1);
 
 		//std::cout<<arg0<<arg1<<std::endl;
 		//std::cout<<(it.second[1] - lastTimestamp)<<((it.second[1] - lastTimestamp) / smax1)<<(((it.second[1] - lastTimestamp) / smax1) * group1)<<std::endl;
