@@ -8,9 +8,9 @@ from keras.optimizers import *
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 
-class BasicConvNetwork(NeuralNetwork):
+class Conv2DNetwork(NeuralNetwork):
 	def __init__(self):
-		self.name="CONV"
+		self.name="Conv2D"
 		self.invertLabels = True
 
 	def train(self, givenDataset, givenLabels, args = {}):

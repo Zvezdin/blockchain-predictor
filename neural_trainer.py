@@ -15,11 +15,11 @@ sys.path.insert(0, os.path.realpath('neural'))
 from neural_network import NeuralNetwork
 from custom_deep_network import CustomDeepNetwork
 from basic_lstm_network import BasicLSTMNetwork
-from basic_conv_network import BasicConvNetwork
+from conv2d_network import Conv2DNetwork
 
 import database_tools as db
 
-globalModels = [CustomDeepNetwork(), BasicLSTMNetwork(), BasicConvNetwork()]
+globalModels = [CustomDeepNetwork(), BasicLSTMNetwork(), Conv2DNetwork()]
 
 def loadDataset(filename):
 	with open(filename, 'rb') as f:
@@ -64,7 +64,7 @@ def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 
 	if models != None:
 		for model in globalModels:
-			if model.name in models:
+			if model.name.lower() in models: #case insensitive
 				selectedModels.append(model)
 	else: selectedModels = globalModels
 
@@ -168,7 +168,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	args, _ = parser.parse_known_args()
 
-	givenModels = args.models.split(',') if args.models else None
+	givenModels = [x.lower() for x in args.models.split(',')] if args.models else None
 
 	modelArgs = {}
 	pairs = args.args.split(',')
