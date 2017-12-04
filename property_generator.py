@@ -9,6 +9,7 @@ import traceback
 
 import pandas as pd
 from arctic.date import DateRange
+import numpy as np
 
 import database_tools as db
 
@@ -148,12 +149,21 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 					print("Failed saving property!", sys.exc_info()[0])
 
 def saveProperty(name, val, quiet = False):
+	val2 = []
+
+	for v in val:
+		v2 = v.copy() #avoid changing the actual values
+
+		if type(v2[name]) == np.ndarray:
+			v2[name] = db.encodeObject(v2[name]) #encode due to DB limitations
+		val2.append(v2)
+
 	if not quiet:
-		df = db.getDataFrame(val)
+		df = db.getDataFrame(val2)
 		print("Saving prop " + name+ " with values ", df.head(5), df.tail(5))
 		print("With byte size:", sys.getsizeof(df))
 
-	db.saveData(chunkStore, name, val, propChunkSize)
+	db.saveData(chunkStore, name, val2, propChunkSize)
 
 def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 	#get the time interval where we have all needed data

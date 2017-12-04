@@ -79,6 +79,4 @@ class PropertyAccountBalanceDistribution(Property):
 				res[1][fromI] += val#value from
 				res[2][fromI] += 1 #tx count
 
-		x = codecs.encode(pickle.dumps(res, -1), "base64").decode()
-
-		return x
+		return res

@@ -127,10 +127,7 @@ class PropertyAccountNumberDistribution(Property):
 
 		print("TX replay %3f, grouping %3f" % (txReplayTime, groupTime))
 
-		#serialize, because of databset limitations
-		serialized = codecs.encode(pickle.dumps(res, -1), "base64").decode()
-
-		return serialized
+		return res
 
 	#methods with default implementations that don't require override
 
