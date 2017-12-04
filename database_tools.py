@@ -11,11 +11,13 @@ from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
-masterKey="_all"
+masterKey="_all_logs"
 
 #other keys include _all_logs and _all_receipts
 
 dbKeys = {'tick': '', 'tx': '', 'block': '', 'logs': ''}
+
+dontRemoveKeys = True
 
 blockChunkSize = 'W'
 txChunkSize = 'D'
@@ -35,10 +37,11 @@ def updateKeys(masterKey):
 
 	keys = getChunkstore().list_symbols()
 
-	for pair in list(dbKeys.items()):
-		if pair[1] not in keys: #if the value (aka datastore key) is not in db
-			dbKeys.pop(pair[0], None) #remove the key, as it is not in the db
-			print("Removing key %s from dbKeys list due to unavailability" % key)
+	if not dontRemoveKeys:
+		for pair in list(dbKeys.items()):
+			if pair[1] not in keys: #if the value (aka datastore key) is not in db
+				dbKeys.pop(pair[0], None) #remove the key, as it is not in the db
+				print("Removing key %s from dbKeys list due to unavailability" % pair[0])
 
 #Methods for db management
 
