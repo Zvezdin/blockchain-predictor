@@ -3,6 +3,7 @@ from property import Property
 import pickle
 import codecs
 import time #for debug timing
+import math
 
 import numpy as np
 
@@ -31,7 +32,11 @@ class PropertyAccountNumberDistribution(Property):
 
 		if fakeData: #we can generate fake accounts with fake data for debug purposes
 			for i in range(10_000_000): #random accounts with random feature values
-				self.accounts[str(0x8d12A197cB00D4947a1fe02325095ce2A5CC6819 + i)] = np.array([1_000_000 * 1000000000000000000,1_000_000 * 1000000000000000000])
+				self.setAccFeat(str(0x8d12A197cB00D4947a1fe02325095ce2A5CC6819 + i), 0, \
+				1_000_000 * 1000000000000000000)
+
+				self.setAccFeat(str(0x8d12A197cB00D4947a1fe02325095ce2A5CC6819 + i), 1, \
+				1_000_000 * 1000000000000000000)
 
 	def processTick(self, data):
 		txs = data['tx']
@@ -47,11 +52,16 @@ class PropertyAccountNumberDistribution(Property):
 		if not fakeData:
 			for tx in txs.itertuples():
 
-				sender = int(tx._2, 16) #the field is named 'from', but it is renamed to its index in the tuple
-								#due to it being a python keyword. Beware, this will break if the raw data changes.
 				try:
-					receiver = int(tx.to, 16)
-				except TypeError:
+					sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
+								#due to it being a python keyword. Beware, this will break if the raw data changes.
+				except AttributeError:
+					print(tx) #debug info to change the attribute
+					raise
+
+				receiver = tx.to
+
+				if type(receiver) == float and math.isnan(receiver):
 					receiver = None #receiver is None when the TX is contract publishing
 
 				if self.useCache:
@@ -63,10 +73,10 @@ class PropertyAccountNumberDistribution(Property):
 
 				self.lastTimestamp = max(self.lastTimestamp, timestamp)
 
-				if sender not in self.accounts:
-					self.accounts[sender] = np.zeros(len(self.features))
-				if receiver is not None and receiver not in self.accounts:
-					self.accounts[receiver] = np.zeros(len(self.features))
+				#if sender not in self.accounts:
+				#	self.accounts[sender] = np.zeros(len(self.features))
+				#if receiver is not None and receiver not in self.accounts:
+				#	self.accounts[receiver] = np.zeros(len(self.features))
 
 				for i, feature in enumerate(self.features):
 					if feature == 'balance':
@@ -77,17 +87,22 @@ class PropertyAccountNumberDistribution(Property):
 						val = int(val)
 
 						if receiver is not None:
-							self.accounts[receiver][i] += val #update the receiver's bal
+							self.addAccFeat(receiver, i, val)
+							#self.accounts[receiver][i] += val #update the receiver's bal
 			
-						bal = self.accounts[sender] #update the sender's bal
-						bal[i] -= val
-						if bal[i] < 0:
-							bal[i] = 0
+						self.subAccFeat(sender, i, val)
+
+						#bal = self.accounts[sender] #update the sender's bal
+						#bal[i] -= val
+						#if bal[i] < 0:
+						#	bal[i] = 0
 
 					if feature == 'lastSeen':
 						if receiver is not None: 
-							self.accounts[receiver][i] = max(self.accounts[receiver][i], timestamp) #update their last active timestamps
-						self.accounts[sender][i] = max(self.accounts[sender][i], timestamp)
+							self.setAccFeat(receiver, i, timestamp)
+							#self.accounts[receiver][i] = max(self.accounts[receiver][i], timestamp) #update their last active timestamps
+						self.setAccFeat(sender, i, timestamp)
+						#self.accounts[sender][i] = max(self.accounts[sender][i], timestamp)
 		else:
 			print("Running group assignments with fake data.")
 
@@ -117,6 +132,8 @@ class PropertyAccountNumberDistribution(Property):
 
 		return serialized
 
+	#methods with default implementations that don't require override
+
 	def getGroupByVal(self, val, index): #our default grouping
 		return min(int((self.scaling[index](val) / self.scaling[index](self.actualMax[index])) * self.groupCount[index]), self.groupCount[index]-1)
 
@@ -132,11 +149,23 @@ class PropertyAccountNumberDistribution(Property):
 	def getMin(self, index):
 		return min(self.accounts.values(), key=lambda x: x[index])[index]
 
+
+	#methods that require override
+
 	#logic that is supposed to execute before the distribution process
 	#feel free to override
 	def beforeDistribution(self):
 		pass
 
+	def setAccFeat(self, acc, index, value):
+		raise NotImplementedError
+
+	def subAccFeat(self, acc, index, value):
+		raise NotImplementedError
+
+	def addAccFeat(self, acc, index, value):
+		raise NotImplementedError
+
 	#method that creates the distribution, given the accounts dict and other data. Must be overridden by child.
 	def createDistribution(self, res):
-		pass
+		raise NotImplementedError
