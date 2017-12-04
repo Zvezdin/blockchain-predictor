@@ -53,7 +53,7 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 	for prop in propertyNames:
 		data = db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN)
 
-		if prop == 'balanceDistribution':
+		if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
 			print("Running numpy array Arctic workaround for prop %s..." % prop)
 			data[prop] = data[prop].apply(lambda x: pickle.loads(codecs.decode(x.encode(), "base64")))
 		properties.append(data)
