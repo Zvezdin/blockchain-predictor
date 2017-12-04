@@ -3,12 +3,28 @@ accMap accounts;
 result createDistribution(int lastTimestamp){
 	result res = {}; //will init whole array to 0.
 
-	const double smax0 = log10(static_cast<float>(max0)), smax1 = log10(static_cast<float>(max1)); //pre-scale our maximum values
+	const double smax0 = SCALE(static_cast<float>(max0)), smax1 = SCALE(static_cast<float>(max1)); //pre-scale our maximum values
 
 	for (auto const &it : accounts){
-		int arg0 = std::min(static_cast<int>((boost::multiprecision::log10(static_cast<castFloat>(it.second[0])) / smax0) * group0), group0-1);
-		int arg1 = std::min(static_cast<int>((boost::multiprecision::log10(static_cast<castFloat>(boost::multiprecision::abs(it.second[1] - lastTimestamp) ) ) / smax1) * group1), group1-1);
+		int arg0, arg1;
 
+		if(it.second[0] <= 1){ //don't want log of 0
+			arg0 = 0;
+		} else if(it.second[0] >= max0){ //compare to the unscaled max
+			arg0 = group0-1;
+		} else{
+			arg0 = std::min(static_cast<int>((SCALE(static_cast<castFloat>(it.second[0])) / smax0) * group0), group0-1);
+		}
+
+		featType val = std::abs(it.second[1] - lastTimestamp);
+		
+		if(val >= max1){
+			arg1 = group1-1;
+		} else if (val <= 1){
+			arg1 = 0;
+		} else {
+			arg1 = std::min(static_cast<int>((SCALE(static_cast<castFloat>(val) ) / smax1) * group1), group1-1);
+		}
 		//std::cout<<arg0<<arg1<<std::endl;
 		//std::cout<<(it.second[1] - lastTimestamp)<<((it.second[1] - lastTimestamp) / smax1)<<(((it.second[1] - lastTimestamp) / smax1) * group1)<<std::endl;
 
@@ -74,9 +90,7 @@ void setItem(RawKey rawKey, short index, featType val, bool add, bool subtract, 
 }
 
 //for values that are small enough to fit within an int
-void setItemInt(RawKey rawKey, short index, int val, bool add, bool subtract, bool stayPositive){
-	std::cout<<"Setting with int"<<std::endl;
-	
+void setItemInt(RawKey rawKey, short index, int val, bool add, bool subtract, bool stayPositive){	
 	setItem(rawKey, index, val, add, subtract, stayPositive);
 }
 
@@ -152,13 +166,13 @@ void test4(const char* numStr){
 
 		//boost::multiprecision::acos(a);
 
-		boost::multiprecision::log10(static_cast<largeFloat>(a));
+		boost::multiprecision::SCALE(static_cast<largeFloat>(a));
 
 		a.str();
 	}
 }
 
-PYBIND11_MODULE(example, m) {
+PYBIND11_MODULE(MODULE_NAME, m) {
 	m.doc() = "pybind11 bindings of a c++ implementation of an account number distribution";
 	
 	m.def("setInt", &setItemInt, "");

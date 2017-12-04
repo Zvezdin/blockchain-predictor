@@ -7,7 +7,6 @@
 #include <cstring>
 #include <algorithm>
 
-#include <gmp.h>
 #include <boost/multiprecision/gmp.hpp>
 
 #include <pybind11/pybind11.h>
@@ -28,6 +27,9 @@ struct cmp_str //a comparator for two cstrings, otherwise the map will compare t
 	}
 };
 
+#define MODULE_NAME cppBalanceLastSeen
+#define SCALE log10
+
 const int group0 = 10;
 const int group1 = 10;
 
@@ -36,13 +38,13 @@ typedef std::array<std::array<int, group0>, group1> result;
 typedef boost::multiprecision::mpz_int largeInt;
 typedef boost::multiprecision::mpf_float largeFloat;
 
-typedef largeFloat castFloat;
+typedef double castFloat;
 
 const int accLen = 43;
 
 typedef std::array<char, accLen> acc;
 
-typedef largeInt featType;
+typedef int featType;
 typedef std::array<featType, 2> feat;
 typedef const char* RawKey;
 typedef std::map<acc, feat> accMap;
@@ -51,8 +53,8 @@ PYBIND11_MAKE_OPAQUE(accMap);
 
 namespace py = pybind11;
 
-const featType max0(1000000);
-const featType max1(2592000);
+const featType max0(1000000); //1M ETH
+const featType max1(2592000); //in seconds, or 30 days
 
 //It is bad practice to include .cpp files, but this is needed for our binding needs.
 #include <propertyAccountNumberDistribution.cpp>
