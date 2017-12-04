@@ -3,6 +3,8 @@ import argparse
 import dateutil.parser
 
 import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
 
 import database_tools as db
 
@@ -20,6 +22,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--index', type=int, default=0, help='If loading a file, provide the index of the property in the data matrix to be visualized.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
+	parser.add_argument('--frame', dest='frame', action='store_true', help='Display single frame values')
+	parser.set_defaults(frame=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -31,16 +35,31 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 			data = pickle.load(f)
 			if type(data) != list:
 				data = [data] #turn to single element list
+					
+			if not args.frame:
+				for dataset in data:
+					values = dataset['dataset'][:, -1, args.index]
+					dates = dataset['dates']
 
-			for dataset in data:
-				values = dataset['dataset'][:, -1, args.index]
-				dates = dataset['dates']
+					print(values, dates)
 
-				print(values, dates)
+					plot(values, dates, 'Value of '+args.data)
+					plot(dataset['labels'], dataset['dates'], 'Correct labels')
+			else:
+				for dataset in data:
+					np.set_printoptions(precision=3)
+					frame = dataset['dataset'][-1, -1, :, :] #shape is samples, layers, width, height
+					print(frame)
+					
+					print(dataset['dataset'].shape)
+					
+					#frame = frame.reshape(frame.shape[0], frame.shape[1], 1) #reshape to width,height, single channel
 
-				plot(values, dates, 'Value of '+args.data)
-				plot(dataset['labels'], dataset['dates'], 'Correct labels')
-
+					plt.imshow(frame, interpolation="nearest")
+					plt.colorbar()
+					plt.show()
+					plt.hist(frame.ravel(), bins=256, range=(0.0, 1.0), fc='k', ec='k')
+					plt.show()
 	elif args.type=='key':
 		data = db.loadData(db.getChunkstore(), args.data, start, end, True)
 		values = data[args.data].values
