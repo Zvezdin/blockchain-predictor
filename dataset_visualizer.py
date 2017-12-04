@@ -15,7 +15,16 @@ def plot(values, datesm, title=''):
 		plt.title(title)
 		plt.show()
 
+def plotImage(val):
+	plt.imshow(val, interpolation="nearest")
+	plt.colorbar()
+	plt.show()
+	plt.hist(val.ravel(), bins=256, range=(0.0, 1.0), fc='k', ec='k')
+	plt.show()
+
 if __name__ == "__main__": #if this is the main file, parse the command args
+	np.set_printoptions(precision=3)
+
 	parser = argparse.ArgumentParser(description="Tool that can read historical data from the db or from a file and visualize it as a graph.")
 	parser.add_argument('data', type=str, help='The data to visualize. Can be a filepath to a pickled (single!) dataset or a key in the db.')
 	parser.add_argument('--type', type=str, default='file', choices=['key', 'file'], help='What type of data to load and visualize- key from the database or a file.')
@@ -47,23 +56,32 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					plot(dataset['labels'], dataset['dates'], 'Correct labels')
 			else:
 				for dataset in data:
-					np.set_printoptions(precision=3)
 					frame = dataset['dataset'][-1, -1, :, :] #shape is samples, layers, width, height
 					print(frame)
 					
 					print(dataset['dataset'].shape)
-					
-					#frame = frame.reshape(frame.shape[0], frame.shape[1], 1) #reshape to width,height, single channel
 
-					plt.imshow(frame, interpolation="nearest")
-					plt.colorbar()
-					plt.show()
-					plt.hist(frame.ravel(), bins=256, range=(0.0, 1.0), fc='k', ec='k')
-					plt.show()
+					plotImage(frame)
 	elif args.type=='key':
-		data = db.loadData(db.getChunkstore(), args.data, start, end, True)
-		values = data[args.data].values
-		dates = data['date'].values
+		prop = args.data
 
-		plot(values, dates, 'Value of '+args.data)
-	
+		data = db.loadData(db.getChunkstore(), prop, start, end, True)
+
+		if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
+			print("Running numpy array Arctic workaround for prop %s..." % prop)
+			data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
+		
+		values = data[prop].values
+
+		if type(values[0]) != np.ndarray:
+			dates = data['date'].values
+
+			plot(values, dates, 'Value of '+prop)
+		else: #if we are dealing with complex property, visualize it
+			val = values[-1]
+
+			if len(val.shape) != 2:
+				print("ERROR: Unsupported property value format with shape %s. Supported shapes are 2D." % str(val.shape))
+			else:
+				print(val)
+				plotImage(val)
