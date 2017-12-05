@@ -17,7 +17,7 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "balanceLastSeenDistribution"
+		self.name = "balanceLastSeenDistribution_cpp"
 
 		self.groupCount = [10, 10]
 		self.features = ['balance', 'lastSeen']
@@ -39,7 +39,7 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 			bal -= value
 			if bal < 0:
 				bal = 0
-			self.accounts[acc] = bal
+			self.balanceCache[acc] = bal
 
 			cppBalanceLastSeen.setInt(acc, index, bal // 1000000000000000000, False, False, False) #convert to ETH and pass to C++
 		else: #TODO this is an impossible case, but still implement it
@@ -48,9 +48,9 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 
 	def addAccFeat(self, acc, index, value):
 		if index == 0:
-			bal = self.accounts.get(acc, 0)
+			bal = self.balanceCache.get(acc, 0)
 			bal += value
-			self.accounts[acc] = bal
+			self.balanceCache[acc] = bal
 
 			cppBalanceLastSeen.setInt(acc, index, bal // 1000000000000000000, False, False, False) #convert to ETH and pass to C++
 		else: #TODO this is an impossible case, but still implement it
