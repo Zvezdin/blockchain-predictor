@@ -1,39 +1,3 @@
-accMap accounts;
-
-result createDistribution(int lastTimestamp){
-	result res = {}; //will init whole array to 0.
-
-	for (auto const &it : accounts){
-		int arg0, arg1;
-
-		if(it.second[0] <= 1){ //don't want log of 0
-			if(minCutoff0) continue;
-			arg0 = 0;
-		} else if(it.second[0] >= max0){ //compare to the unscaled max
-			if(maxCutoff0) continue;
-			arg0 = group0-1;
-		} else{
-			arg0 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(it.second[0]) * SCALE_MUL)), group0-1);
-		}
-
-		featType val = std::abs(it.second[1] - lastTimestamp);
-		
-		if(val >= max1){
-			if(maxCutoff1) continue;
-			arg1 = group1-1;
-		} else if (val <= 1){
-			if(minCutoff1) continue;
-			arg1 = 0;
-		} else {
-			arg1 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(val) * SCALE_MUL)), group1-1);
-		}
-
-		res[arg0][arg1] ++;
-	}
-
-	return res;
-}
-
 result pythonDistribution(int lastTimestamp){
 	return createDistribution(lastTimestamp);
 }
