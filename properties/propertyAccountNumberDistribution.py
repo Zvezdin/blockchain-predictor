@@ -41,8 +41,6 @@ class PropertyAccountNumberDistribution(Property):
 	def processTick(self, data):
 		txs = data['tx']
 
-		res = np.zeros((self.groupCount[0], self.groupCount[1]))
-
 		lastTime = 0
 
 		start = time.time()
@@ -121,7 +119,7 @@ class PropertyAccountNumberDistribution(Property):
 		#we have updated our accounts, let's create the double distribution.
 		#by assigning two group numbers to each one of them
 
-		self.createDistribution(res)
+		res = self.createDistribution()
 
 		groupTime = time.time() - start
 
@@ -164,5 +162,5 @@ class PropertyAccountNumberDistribution(Property):
 		raise NotImplementedError
 
 	#method that creates the distribution, given the accounts dict and other data. Must be overridden by child.
-	def createDistribution(self, res):
+	def createDistribution(self):
 		raise NotImplementedError

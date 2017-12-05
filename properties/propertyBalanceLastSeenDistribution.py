@@ -17,12 +17,13 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "balanceLastSeenDistribution_cpp"
+		self.name = "balanceLastSeenDistribution_cpp_log2"
 
 		self.groupCount = [10, 10]
 		self.features = ['balance', 'lastSeen']
 		self.max = [1_000_000 * 1000000000000000000, 2592000] #1M ETH in wei, 30 days in seconds
 		self.scaling = [self.scaleLog, self.scaleLog] #or self.noScaling
+		self.balanceCutoff = 100000000000000000 # -> 0.1ETH
 		self.balanceCache = {}
 
 		self.useCache = False #group caching to speed up distributions. This is moved to the C++ side
@@ -41,7 +42,7 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 				bal = 0
 			self.balanceCache[acc] = bal
 
-			cppBalanceLastSeen.setInt(acc, index, bal // 1000000000000000000, False, False, False) #convert to ETH and pass to C++
+			cppBalanceLastSeen.setInt(acc, index, bal // self.balanceCutoff, False, False, False) #convert to ETH and pass to C++
 		else: #TODO this is an impossible case, but still implement it
 			raise NotImplementedError
 
@@ -52,10 +53,11 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 			bal += value
 			self.balanceCache[acc] = bal
 
-			cppBalanceLastSeen.setInt(acc, index, bal // 1000000000000000000, False, False, False) #convert to ETH and pass to C++
+			cppBalanceLastSeen.setInt(acc, index, bal // self.balanceCutoff, False, False, False) #convert to ETH and pass to C++
 		else: #TODO this is an impossible case, but still implement it
 			raise NotImplementedError
 
-	def createDistribution(self, res):
-		res[:][:] = np.array(cppBalanceLastSeen.createDistribution(self.lastTimestamp)) #use C++ backend
+	def createDistribution(self):
+		return np.array(cppBalanceLastSeen.createDistribution(self.lastTimestamp)) #use C++ backend
+
 	#the rest of the logic is inherited from the base class
