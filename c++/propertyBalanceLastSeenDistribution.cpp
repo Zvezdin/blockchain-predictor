@@ -28,7 +28,9 @@ struct cmp_str //a comparator for two cstrings, otherwise the map will compare t
 };
 
 #define MODULE_NAME cppBalanceLastSeen
-#define SCALE log2
+#define SCALE log10
+
+const double SCALE_MUL = 10.0;
 
 const int group0 = 10;
 const int group1 = 10;
@@ -53,7 +55,7 @@ PYBIND11_MAKE_OPAQUE(accMap);
 
 namespace py = pybind11;
 
-const featType max0(1000000); //1M ETH
+const featType max0(50000); //Max Bal for scale, in ETH
 const featType max1(2592000); //in seconds, or 30 days
 
 //modern day capitalism 101
@@ -61,6 +63,10 @@ const bool maxCutoff0 = false; //don't cut off the richest
 const bool minCutoff0 = false; //don't cut off the poorest <=1 ETH
 const bool maxCutoff1 = true; //cut off the inactive ones
 const bool minCutoff1 = false; //no need to cut off the most active
+
+castFloat linearScale(castFloat x){
+	return x;
+}
 
 //It is bad practice to include .cpp files, but this is needed for our binding needs.
 #include <propertyAccountNumberDistribution.cpp>
