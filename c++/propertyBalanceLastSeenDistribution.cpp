@@ -28,14 +28,9 @@ struct cmp_str //a comparator for two cstrings, otherwise the map will compare t
 };
 
 #define MODULE_NAME cppBalanceLastSeen
-#define SCALE log10
+#define SCALE log2
 
-const double SCALE_MUL = 10.0;
-
-const int group0 = 10;
-const int group1 = 10;
-
-typedef std::array<std::array<int, group0>, group1> result;
+const double SCALE_MUL = 1.0;
 
 typedef boost::multiprecision::mpz_int largeInt;
 typedef boost::multiprecision::mpf_float largeFloat;
@@ -55,14 +50,19 @@ PYBIND11_MAKE_OPAQUE(accMap);
 
 namespace py = pybind11;
 
-const featType max0(50000); //Max Bal for scale, in ETH
-const featType max1(2592000); //in seconds, or 30 days
+const featType max0(10000000); //Max Bal for scale, in ETH / 10
+const featType max1(2592000*2); //in seconds, or 60 days
 
 //modern day capitalism 101
 const bool maxCutoff0 = false; //don't cut off the richest 
 const bool minCutoff0 = false; //don't cut off the poorest <=1 ETH
 const bool maxCutoff1 = true; //cut off the inactive ones
 const bool minCutoff1 = false; //no need to cut off the most active
+
+const int group0 = int(SCALE(static_cast<castFloat>(max0) * SCALE_MUL)); //our group counts are dynamic and depend on our max values
+const int group1 = int(SCALE(static_cast<castFloat>(max1) * SCALE_MUL));
+
+typedef std::array<std::array<featType, group1>, group0> result;
 
 castFloat linearScale(castFloat x){
 	return x;

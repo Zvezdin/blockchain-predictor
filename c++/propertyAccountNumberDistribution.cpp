@@ -3,8 +3,6 @@ accMap accounts;
 result createDistribution(int lastTimestamp){
 	result res = {}; //will init whole array to 0.
 
-	const double smax0 = SCALE(static_cast<float>(max0) * SCALE_MUL), smax1 = SCALE(static_cast<float>(max1) * SCALE_MUL); //pre-scale our maximum values
-
 	for (auto const &it : accounts){
 		int arg0, arg1;
 
@@ -15,7 +13,7 @@ result createDistribution(int lastTimestamp){
 			if(maxCutoff0) continue;
 			arg0 = group0-1;
 		} else{
-			arg0 = std::min(static_cast<int>(((SCALE(static_cast<castFloat>(it.second[0]) * SCALE_MUL ) ) / smax0) * group0), group0-1);
+			arg0 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(it.second[0]) * SCALE_MUL)), group0-1);
 		}
 
 		featType val = std::abs(it.second[1] - lastTimestamp);
@@ -27,10 +25,8 @@ result createDistribution(int lastTimestamp){
 			if(minCutoff1) continue;
 			arg1 = 0;
 		} else {
-			arg1 = std::min(static_cast<int>(((SCALE(static_cast<castFloat>(val) * SCALE_MUL ) ) / smax1) * group1), group1-1);
+			arg1 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(val) * SCALE_MUL)), group1-1);
 		}
-		//std::cout<<arg0<<arg1<<std::endl;
-		//std::cout<<(it.second[1] - lastTimestamp)<<((it.second[1] - lastTimestamp) / smax1)<<(((it.second[1] - lastTimestamp) / smax1) * group1)<<std::endl;
 
 		res[arg0][arg1] ++;
 	}
