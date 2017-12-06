@@ -19,14 +19,13 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 		super().__init__()
 		self.name = "balanceLastSeenDistribution_cpp_log2"
 
-		self.groupCount = [10, 10]
 		self.features = ['balance', 'lastSeen']
-		self.max = [1_000_000 * 1000000000000000000, 2592000] #1M ETH in wei, 30 days in seconds
-		self.scaling = [self.scaleLog, self.scaleLog] #or self.noScaling
 		self.balanceCutoff = 100000000000000000 # -> 0.1ETH
 		self.balanceCache = {}
 
 		self.useCache = False #group caching to speed up distributions. This is moved to the C++ side
+
+		super().updateConfig()
 
 	def setAccFeat(self, acc, index, value):
 		if index == 1: #lastSeen feature
@@ -45,7 +44,6 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 			cppBalanceLastSeen.setInt(acc, index, bal // self.balanceCutoff, False, False, False) #convert to ETH and pass to C++
 		else: #TODO this is an impossible case, but still implement it
 			raise NotImplementedError
-
 
 	def addAccFeat(self, acc, index, value):
 		if index == 0:
