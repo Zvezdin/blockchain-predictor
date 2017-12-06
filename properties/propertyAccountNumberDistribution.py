@@ -40,12 +40,10 @@ class PropertyAccountNumberDistribution(Property):
 				self.setAccFeat(str(0x8d12A197cB00D4947a1fe02325095ce2A5CC6819 + i), 1, \
 				1_000_000 * 1000000000000000000)
 
-	def useContractData(self):
-		self.contractData = True
-		self.contracts = {}
-		if 'logs' not in self.requires:
+	def updateConfig(self):
+		if self.contractData and 'logs' not in self.requires:
 			self.requires.append('logs')
-
+			self.contracts = {}
 	def processTick(self, data):
 		txs = data['tx']
 
@@ -70,15 +68,19 @@ class PropertyAccountNumberDistribution(Property):
 						self.setAccFeat(contract, i, timestamp)
 					if feature == 'contractAge' and new:
 						self.setAccFeat(contract, i, timestamp)
-					#TODO: bal, avg tx val, vol of txs, acc bal.
+					#TODO: bal, avg tx val, vol of txs, avg acc bal.
 
 		start = time.time()
 
-		#update our global dictionary of accounts
+		#replay the transactions to update our state
 
 		if not fakeData:
-			for tx in txs.itertuples():
+			inVolume = {}
+			outVolume = {}
+			avgValue = {}
+			numTxs = {}
 
+			for tx in txs.itertuples():
 				try:
 					sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
 								#due to it being a python keyword. Beware, this will break if the raw data changes.
@@ -100,36 +102,64 @@ class PropertyAccountNumberDistribution(Property):
 
 				self.lastTimestamp = max(self.lastTimestamp, timestamp)
 
-				#if sender not in self.accounts:
-				#	self.accounts[sender] = np.zeros(len(self.features))
-				#if receiver is not None and receiver not in self.accounts:
-				#	self.accounts[receiver] = np.zeros(len(self.features))
-
 				for i, feature in enumerate(self.features):
+					val = float(tx.value)
+
+					if int(val) != val:
+						raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
+					val = int(val)
+
 					if feature == 'balance':
-						val = float(tx.value)
-
-						if int(val) != val:
-							raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
-						val = int(val)
-
 						if receiver is not None:
-							self.addAccFeat(receiver, i, val)
-							#self.accounts[receiver][i] += val #update the receiver's bal
-			
+							self.addAccFeat(receiver, i, val)				
 						self.subAccFeat(sender, i, val)
 
-						#bal = self.accounts[sender] #update the sender's bal
-						#bal[i] -= val
-						#if bal[i] < 0:
-						#	bal[i] = 0
+					if feature == 'contractBalance': #track the balance of contracts
+						if sender in self.contracts:
+							self.subAccFeat(sender, i, val)
+						if receiver in self.contracts:
+							self.addAccFeat(receiver, i, val)
 
+					if feature == 'contractInVolume':
+						if receiver in self.contracts:
+							inVolume.setdefault(receiver, 0)
+							inVolume[receiver] = inVolume[receiver] + val
+
+					if feature == 'contractOutVolume':
+						if sender in self.contracts:
+							print("Outgoing transaction from %s with value %d" % (sender, val))
+							outVolume.setdefault(sender, 0)
+							outVolume[sender] += val
+
+					if feature == 'contractTx' or feature == 'contractAvgValue': #avgTxValue needs the amount of transactions
+						if receiver in self.contracts:
+							numTx.setdefault(receiver, 0)
+							numTx[receiver] += 1
+						#TODO: What about outgoing transactions?
+					if feature == 'contractAvgValue':
+						if receiver in self.contracs:
+							avgVal.setdefault(receiver, 0)
+							avgVal[receiver] += val
+						#TODO: Outgoing?
 					if feature == 'lastSeen':
 						if receiver is not None: 
 							self.setAccFeat(receiver, i, timestamp)
-							#self.accounts[receiver][i] = max(self.accounts[receiver][i], timestamp) #update their last active timestamps
 						self.setAccFeat(sender, i, timestamp)
-						#self.accounts[sender][i] = max(self.accounts[sender][i], timestamp)
+			if 'contractTx' in self.features:
+				for contract in numTx:
+					#method of keeping only the sum of the values for previous x time ticks:
+					#self.subAccFeat ... 
+					#self.addAccFeat(contract, self.features.index('contractTx'), numTx[contract])
+					self.setAccFeat(contract, self.features.index('contractTx'), numTx[contract])
+			if 'contractAvgValue' in self.features:
+				for contract in avgValue:
+					self.setAccFeat(contract, self.features.index('contractAvgValue'), avgValue[contract])
+			if 'contractInVolume' in self.features:
+				for contract in inVolume:
+					self.setAccFeat(contract, self.features.index('contractInVolume'), inVolume[contract])
+			if 'contractOutVolume' in self.features:
+				for contract in outVolume:
+					self.setAccFeat(contract, self.features.index('contractOutVolume'), outVolume[contract])
 		else:
 			print("Running group assignments with fake data.")
 
