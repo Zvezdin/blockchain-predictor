@@ -22,6 +22,8 @@ class PropertyAccountNumberDistribution(Property):
 		self.scaling = [self.noScaling, self.noScaling] #or self.scaleLog
 		self.lastTimestamp = 0 #will be updated
 
+		self.contractData = False
+
 		self.actualMax = [None, None]
 
 		self.useCache = False #we can cache the groups of each account that hasn't changed since last time to speed up performance
@@ -38,10 +40,37 @@ class PropertyAccountNumberDistribution(Property):
 				self.setAccFeat(str(0x8d12A197cB00D4947a1fe02325095ce2A5CC6819 + i), 1, \
 				1_000_000 * 1000000000000000000)
 
+	def useContractData(self):
+		self.contractData = True
+		self.contracts = {}
+		if 'logs' not in self.requires:
+			self.requires.append('logs')
+
 	def processTick(self, data):
 		txs = data['tx']
 
 		lastTime = 0
+
+		if self.useContractData:
+			logs = data['logs']
+			for log in logs.itertuples():
+				contract = log.address
+				new = False
+				if contract not in self.contracts:
+					self.contracts[contract] = True
+					new = True
+
+				timestamp = log.date.value // 10**9 #EPOCH time
+
+				for i, feature in enumerate(self.features):
+					if feature == 'erc20':
+						if log.topic0 == '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef': #Signature ERC20 Transfer
+							self.addAccFeat(contract, i, 1) #add one to the total counter of that contract
+					if feature == 'contractLastSeen':
+						self.setAccFeat(contract, i, timestamp)
+					if feature == 'contractAge' and new:
+						self.setAccFeat(contract, i, timestamp)
+					#TODO: bal, avg tx val, vol of txs, acc bal.
 
 		start = time.time()
 
