@@ -49,7 +49,7 @@ class PropertyAccountNumberDistribution(Property):
 
 		lastTime = 0
 
-		if self.useContractData:
+		if self.contractData:
 			logs = data['logs']
 			for log in logs.itertuples():
 				contract = log.address

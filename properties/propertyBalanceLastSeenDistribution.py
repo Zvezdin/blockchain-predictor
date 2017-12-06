@@ -20,6 +20,7 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 		self.name = "balanceLastSeenDistribution_cpp_log2"
 
 		self.features = ['balance', 'lastSeen']
+		self.max = [0, 0] #our real maximum values are in the C++ backend
 		self.balanceCutoff = 100000000000000000 # -> 0.1ETH
 		self.balanceCache = {}
 
