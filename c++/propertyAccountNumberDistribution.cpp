@@ -83,6 +83,16 @@ int getLen(){
 	return accounts.size();
 }
 
+void clearState(){
+	accounts.clear();
+}
+
+void clearIndex(int index){
+	for (auto const &it : accounts){
+		accounts[it.first][index] = 0;
+	}
+}
+
 void test(){
     fakeData();
 
@@ -111,31 +121,6 @@ void test(){
     }
 }
 
-void test4(const char* numStr){
-	largeInt a(numStr);
-	for(int i=0; i<1000000; i++){
-
-		/*for(int i=0; numStr[i] != '\0'; i++){
-			a *= 10;
-			a += int(numStr[i]) - 48;
-		}*/
-
-		//std::cout<<a<<std::endl;
-
-		//largeFloat b = static_cast<largeFloat>(a);
-
-		//std::cout<<b<<std::endl;
-
-		//std::cout<<boost::multiprecision::log1p(a)<<std::endl;
-
-		//boost::multiprecision::acos(a);
-
-		//boost::multiprecision::SCALE(static_cast<largeFloat>(a));
-
-		a.str();
-	}
-}
-
 PYBIND11_MODULE(MODULE_NAME, m) {
 	m.doc() = "pybind11 bindings of a c++ implementation of an account number distribution";
 	
@@ -145,6 +130,6 @@ PYBIND11_MODULE(MODULE_NAME, m) {
 	m.def("getStr", &getItemStr, "");
 	m.def("len", &getLen, "");
 	m.def("test", &test, "");
-	m.def("test4", &test4, "");
+	m.def("clear", &clearState, "");
 	m.def("createDistribution", &pythonDistribution, "");
 }
