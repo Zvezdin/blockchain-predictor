@@ -22,7 +22,8 @@ class PropertyAccountNumberDistribution(Property):
 		self.scaling = [self.noScaling, self.noScaling] #or self.scaleLog
 		self.lastTimestamp = 0 #will be updated
 
-		self.contractData = False
+		self.contractData = False #to load contract data or not
+		self.ignoreTx = False #if we do not require usage of Tx data, we can ignore it for better performance
 
 		self.actualMax = [None, None]
 
@@ -41,9 +42,14 @@ class PropertyAccountNumberDistribution(Property):
 				1_000_000 * 1000000000000000000)
 
 	def updateConfig(self):
-		if self.contractData and 'logs' not in self.requires:
-			self.requires.append('logs')
+		if self.contractData:
+			if 'logs' not in self.requires:
+				self.requires.append('logs')
 			self.contracts = {}
+
+		if self.ignoreTx and 'tx' in self.requires:
+			self.requires.remove('tx')
+
 	def processTick(self, data):
 		txs = data['tx']
 
@@ -127,7 +133,7 @@ class PropertyAccountNumberDistribution(Property):
 
 					if feature == 'contractOutVolume':
 						if sender in self.contracts:
-							print("Outgoing transaction from %s with value %d" % (sender, val))
+							print("Outgoing transaction from %s with value %d and TX hash" % (sender, val, tx.hash))
 							outVolume.setdefault(sender, 0)
 							outVolume[sender] += val
 
@@ -153,7 +159,7 @@ class PropertyAccountNumberDistribution(Property):
 					self.setAccFeat(contract, self.features.index('contractTx'), numTx[contract])
 			if 'contractAvgValue' in self.features:
 				for contract in avgValue:
-					self.setAccFeat(contract, self.features.index('contractAvgValue'), avgValue[contract])
+					self.setAccFeat(contract, self.features.index('contractAvgValue'), avgValue[contract] / numTx[contract])
 			if 'contractInVolume' in self.features:
 				for contract in inVolume:
 					self.setAccFeat(contract, self.features.index('contractInVolume'), inVolume[contract])
@@ -204,13 +210,14 @@ class PropertyAccountNumberDistribution(Property):
 		return min(self.accounts.values(), key=lambda x: x[index])[index]
 
 
-	#methods that require override
-
 	#logic that is supposed to execute before the distribution process
 	#feel free to override
 	def beforeDistribution(self):
 		pass
 
+	#methods that require override
+
+	#modifiers of account features that set a new value, or subtract or add to the current one.
 	def setAccFeat(self, acc, index, value):
 		raise NotImplementedError
 
