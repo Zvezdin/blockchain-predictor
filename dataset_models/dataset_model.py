@@ -53,3 +53,8 @@ class DatasetModel(abc.ABC):
 			return DatasetModel.basic_normalization(arr, base)
 		elif method == 'around_zero':
 			return DatasetModel.around_zero_normalization(arr, base)
+		elif method == 'auto':
+			if np.sum(arr < 0) > 0: #if we have negative values
+				return DatasetModel.around_zero_normalization(arr, base) #around_zero method is recommended for signed values
+			else:
+				return DatasetModel.basic_normalization(arr, base) #basic works in any case
