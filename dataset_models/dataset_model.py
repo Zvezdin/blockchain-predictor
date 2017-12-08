@@ -23,6 +23,8 @@ class DatasetModel(abc.ABC):
 		if maxVal - minVal == 0: #can't normalize if the whole array is zeroes
 			return arr
 
+		print("Normalized with %d min and %d max." % (minVal, maxVal))
+
 		return (arr - minVal) / (maxVal - minVal)
 
 	@staticmethod

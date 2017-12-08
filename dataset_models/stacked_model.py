@@ -15,18 +15,18 @@ class StackedModel(DatasetModel):
 		if not properties: return
 
 		#argument defaults
-		args.setdefault('window', 104)
+		args.setdefault('window', 1)
 		args.setdefault('normalize', True)
 		args.setdefault('target', ['highPrice_rel'])
 		args.setdefault('localNormalize', [None])
 		args.setdefault('defaultNormalization', 'basic')
-		args.setdefault('normalization', {'highPrice_rel': 'around_zero'})
+		args.setdefault('normalization', {'highPrice_rel': 'around_zero', 'balanceLastSeenDistribution_cpp_log2_rel': 'around_zero'})
 		args.setdefault('binary', False)
 		args.setdefault('blacklistTarget', True)
 		args.setdefault('invert', False)
 
-		args.setdefault('width', 10)
-		args.setdefault('height', 1)
+		args.setdefault('width', 24)
+		args.setdefault('height', 23)
 		args.setdefault('flexible', True) #if the height of the image can be expanded if the chosen properties don't fit
 
 		propertyValues = np.ndarray((properties[0].shape[0], args['width'], args['height']))

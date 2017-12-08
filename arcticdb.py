@@ -19,7 +19,7 @@ import database_tools as db
 blockSeries = 10000
 attemptsThreshold = 10
 
-logsSeparate = True
+logsSeparate = False
 parseToInt = False
 
 priceDataFile = 'data/cryptocompare_price_data.json'

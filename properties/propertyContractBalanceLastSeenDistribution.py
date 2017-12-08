@@ -11,13 +11,13 @@ import cppBalanceLastSeen
 
 class PropertyContractBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 	"""
-	An implementation of the PropertyContractAccountNumberDistribution, that distributes contract accounts based on:
+	An implementation of the PropertyAccountNumberDistribution, that distributes contract accounts based on:
 	1- Balance
 	2- Time since last transaction
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "contractBalanceLastSeenDistribution_cpp_log2"
+		self.name = "contractBalanceLastSeenDistribution_log2_v2"
 
 		self.contractData = True
 
