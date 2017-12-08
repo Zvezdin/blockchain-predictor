@@ -7,6 +7,7 @@ import argparse
 import pickle
 import io
 import codecs
+import math
 
 import pandas as pd
 from arctic.date import CLOSED_OPEN
@@ -30,7 +31,7 @@ debug = False
 
 labelKey = 'closePrice'
 
-def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
+def generateDataset(modelName, propertyNames, labelsType, start=None, end=None, args = {}, preprocess = {}):
 	print("Generating dataset for properties ", propertyNames, "and using model", modelName, "for range", start, end)
 
 	model = None
@@ -55,16 +56,66 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None):
 
 		if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
 			print("Running numpy array Arctic workaround for prop %s..." % prop)
-			data[prop] = data[prop].apply(lambda x: pickle.loads(codecs.decode(x.encode(), "base64")))
+			data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
+
+		if prop in preprocess:
+			settings = preprocess[prop]
+			if 'scale' in settings:
+				if settings['scale'] == 'log2':
+					scaleF = np.log2
+				elif settings['scale'] == 'log10':
+					scaleF = np.log10
+				else:
+					raise ValueError("Unsupported scale type %s for preprocessing of property %s!" % (settings['scale'], prop))
+
+				def scale(val):
+					global globalMin
+
+					if globalMin < 0: #if we have relative values
+						val -= globalMin #turn all negatives to positives
+
+					val = scaleF(val)
+					val[val<0] = 0 #log if 0 is -inf
+
+					return val
+			else:
+				scale = lambda x: x #no scaling
+
+			xAxis = ':'
+			yAxis = ':'
+			
+			if 'slices' in settings:
+				xAxis, yAxis = settings['slices']
+
+			strToSlice = lambda string: slice(*map(lambda x: int(x.strip()) if x.strip() else None, string.split(':')))
+
+			xAxis = strToSlice(xAxis)
+			yAxis = strToSlice(yAxis)
+
+			print("Slicing data by %s and %s." % (str(xAxis), str(yAxis)))
+
+			data[prop] = data[prop].apply(lambda x: x[yAxis, xAxis]) # trim
+
+			global globalMin #we need the minimum single value, to see if the property is realtive or not
+			globalMin = 0
+
+			def findMin(x):
+				global globalMin
+				globalMin = min(globalMin, np.min(x))
+				return x
+
+			data[prop].apply(findMin)
+
+			data[prop] = data[prop].apply(lambda x: scale(x)) # scale
+
 		properties.append(data)
 
 	for prop in properties:
 		if len(properties[0]) != len(prop):
-			print("Error: Length mismatch in the data properties.")
-			return
+			raise ValueError("Error: Length mismatch in the data properties.")
 
 	#feed the model the properties and let it generate
-	dataset, dates, nextPrices =  model.generate(properties)
+	dataset, dates, nextPrices =  model.generate(properties, args)
 
 	labels, dates = generateLabels(dates, nextPrices, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
 
@@ -126,7 +177,7 @@ def saveDataset(filename, data):
 		except Exception as e:
 			print('Unable to save data to', filename, ':', e)
 
-def run(model, properties, start, end, filename, labels, ratio, shuffle):
+def run(model, properties, start, end, filename, labels, ratio, shuffle, args, preprocess = {}):
 	start = dateutil.parser.parse(start) if start is not None else None
 	end = dateutil.parser.parse(end) if end is not None else None
 
@@ -137,7 +188,7 @@ def run(model, properties, start, end, filename, labels, ratio, shuffle):
 		return
 
 	#generate the dataset
-	dataset, labels, dates = generateDataset(model, properties.split(','), labels, start, end)
+	dataset, labels, dates = generateDataset(model, properties.split(','), labels, start, end, args, preprocess)
 
 	print("Generated dataset and labels with length %s." % labels.shape[0])
 
@@ -196,4 +247,4 @@ if __name__ == "__main__":
 		filename = "data/dataset_" + str(args.start) + "-" + str(args.end) + ".pickle"
 	else: filename = args.filename
 
-	run(args.model, args.properties, args.start, args.end, filename, args.labels, args.ratio, args.shuffle)
+	run(args.model, args.properties, args.start, args.end, filename, args.labels, args.ratio, args.shuffle, {})
