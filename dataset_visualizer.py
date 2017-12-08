@@ -19,11 +19,9 @@ def plotImage(val):
 	plt.imshow(val, interpolation="nearest")
 	plt.colorbar()
 	plt.show()
-	plt.hist(val.ravel(), bins=256, range=(0.0, 1.0), fc='k', ec='k')
-	plt.show()
 
 if __name__ == "__main__": #if this is the main file, parse the command args
-	np.set_printoptions(precision=3)
+	np.set_printoptions(precision=3, linewidth=180)
 
 	parser = argparse.ArgumentParser(description="Tool that can read historical data from the db or from a file and visualize it as a graph.")
 	parser.add_argument('data', type=str, help='The data to visualize. Can be a filepath to a pickled (single!) dataset or a key in the db.')
@@ -32,7 +30,11 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--frame', dest='frame', action='store_true', help='Display single frame values')
+	parser.add_argument('--trim', dest='trim', action='store_true', help='A frame can be trimmed from values on Y=0 and X=end.')
+	parser.add_argument('--log2', dest='log2', action='store_true', help='Scale all account counts by a log2.')
 	parser.set_defaults(frame=False)
+	parser.set_defaults(trim=False)
+	parser.set_defaults(log2=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -61,6 +63,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					
 					print(dataset['dataset'].shape)
 
+					print(dataset['dates'][-1])
+
 					plotImage(frame)
 	elif args.type=='key':
 		prop = args.data
@@ -72,16 +76,32 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 			data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
 		
 		values = data[prop].values
+		dates = data['date'].values
 
 		if type(values[0]) != np.ndarray:
-			dates = data['date'].values
-
 			plot(values, dates, 'Value of '+prop)
 		else: #if we are dealing with complex property, visualize it
-			val = values[-1]
+			for i in range(1, 10*1, 1):
+				val = values[-i]
+				print(val.shape)
 
-			if len(val.shape) != 2:
-				print("ERROR: Unsupported property value format with shape %s. Supported shapes are 2D." % str(val.shape))
-			else:
-				print(val)
-				plotImage(val)
+				if args.trim:
+					val = val[1:, :-1]
+
+				if args.log2:
+					if np.min(val) < 0: #if we have relative values
+						val -= np.min(val) #turn all negatives to positives
+
+					val = np.log2(val)
+					val[val<0] = 0 #log if 0 is -inf
+
+				print(val.shape)
+				date = dates[-i]
+
+				if len(val.shape) != 2:
+					print("ERROR: Unsupported property value format with shape %s. Supported shapes are 2D." % str(val.shape))
+				else:
+					print(val)
+					print(val.shape)
+					print(date)
+					plotImage(val)
