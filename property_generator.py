@@ -23,6 +23,8 @@ from propertyBalanceLastSeenDistribution import PropertyBalanceLastSeenDistribut
 from propertyBlockDifficulty import PropertyBlockDifficulty
 from propertyBlockSize import PropertyBlockSize
 from propertyClosePrice import PropertyClosePrice
+from propertyContractBalanceLastSeenDistribution import PropertyContractBalanceLastSeenDistribution
+from propertyContractVolumeInERC20Distribution import PropertyContractVolumeInERC20Distribution
 from propertyGasLimit import PropertyGasLimit
 from propertyGasPrice import PropertyGasPrice
 from propertyGasUsed import PropertyGasUsed
@@ -42,7 +44,8 @@ from propertyVolumeTo import PropertyVolumeTo
 chunkStore = db.getChunkstore()
 
 
-globalProperties = [PropertyAccountBalanceDistribution(), PropertyBalanceLastSeenDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(), PropertyGasLimit(), PropertyGasPrice(),
+globalProperties = [PropertyAccountBalanceDistribution(), PropertyBalanceLastSeenDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(),
+PropertyContractBalanceLastSeenDistribution(), PropertyContractVolumeInERC20Distribution(), PropertyGasLimit(), PropertyGasPrice(),
 PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(),
 PropertyStickPrice(), PropertyTransactionCount(), PropertyUniqueAccounts(), PropertyVolumeFrom(), PropertyVolumeTo()]
 
@@ -64,6 +67,10 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 		for prop in globalProperties: #for every property that we have
 			if prop.name in selectedProperties: #if it is selected
 				properties.append(prop) #add it for generation
+		
+		if len(properties) != len(selectedProperties):
+			print("ERROR! One or more of the given properties do not exist!")
+			return
 	else: properties = globalProperties
 
 	print("Working with properties:", properties)
