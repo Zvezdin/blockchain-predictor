@@ -4,10 +4,12 @@ import pickle
 import codecs
 import time #for debug timing
 import math
+from collections import deque
 
 import numpy as np
 
 fakeData = False
+debug = False
 
 class PropertyAccountNumberDistribution(Property):
 	def __init__(self):
@@ -18,11 +20,15 @@ class PropertyAccountNumberDistribution(Property):
 		self.accounts = {} #dict, holding an array of feature values for each account
 		self.groupCount = [10, 10] 
 		self.features = ['balance', 'lastSeen']
+		#The next setting is WIP and doesn't work as of now
+		self.lookBack = [1, 1] #for feature values, denotes the amout of past values to be kept and the sum returned as the current feature value
 		self.max = [None, None]
 		self.scaling = [self.noScaling, self.noScaling] #or self.scaleLog
 		self.lastTimestamp = 0 #will be updated
 
 		self.contractData = False #to load contract data or not
+		self.unifyContracts = True #to consider two or more contracts, participating in the same transaction as the same
+
 		self.ignoreTx = False #if we do not require usage of Tx data, we can ignore it for better performance
 
 		self.actualMax = [None, None]
@@ -47,125 +53,155 @@ class PropertyAccountNumberDistribution(Property):
 				self.requires.append('logs')
 			self.contracts = {}
 
+		self.contractAlias = {} #dict to hold references that unify multiple contracts
+			#into one, based on common activity
+
 		if self.ignoreTx and 'tx' in self.requires:
 			self.requires.remove('tx')
+
+		self.pastValues = [{}] * len(self.lookBack)
 
 	def processTick(self, data):
 		txs = data['tx']
 
 		lastTime = 0
 
-		if self.contractData:
-			logs = data['logs']
-			for log in logs.itertuples():
-				contract = log.address
-				new = False
-				if contract not in self.contracts:
-					self.contracts[contract] = True
-					new = True
-
-				timestamp = log.date.value // 10**9 #EPOCH time
-
-				for i, feature in enumerate(self.features):
-					if feature == 'erc20':
-						if log.topic0 == '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef': #Signature ERC20 Transfer
-							self.addAccFeat(contract, i, 1) #add one to the total counter of that contract
-					if feature == 'contractLastSeen':
-						self.setAccFeat(contract, i, timestamp)
-					if feature == 'contractAge' and new:
-						self.setAccFeat(contract, i, timestamp)
-					#TODO: bal, avg tx val, vol of txs, avg acc bal.
-
 		start = time.time()
 
-		#replay the transactions to update our state
-
 		if not fakeData:
+			hashMap = {} #dict that maps transaction hashes to the first contract address they point to
+
+			#replay the transactions and logs to update our state
+			if self.contractData:
+				logs = data['logs']
+				for log in logs.itertuples():
+
+					if self.unifyContracts:
+						if log.hash not in hashMap: #if we see this hash for the first time
+							hashMap[log.hash] = log.address #save the first contract this hash points to
+
+						if hashMap[log.hash] != log.address: #same TX, different event sources
+							self.contractAlias[log.address] = hashMap[log.hash] #make the connection between the two sources
+							if debug:
+								print("(LOG) Alias from %s to %s because of TX %s" % (log.address, hashMap[log.hash], log.hash))
+
+					contract = self.contractAlias.get(log.address, log.address) #if we have a connection, use the initial source
+					
+					new = False
+					if contract not in self.contracts:
+						self.contracts[contract] = True
+						new = True
+
+					timestamp = log.date.value // 10**9 #EPOCH time
+
+					for i, feature in enumerate(self.features):
+						if feature == 'erc20':
+							if type(log.topic0) == str: #if we have any log topic
+								#Common topics of events:
+								#'0xdcbc1c05240f31ff3ad067ef1ee35ce4997762752e3a095284754544f4c709d7' - Deposit event - not in ERC20 Standart
+								#'0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' - ERC20 Transfer method
+								self.addAccFeat(contract, i, 1) #add one to the total counter of that contract
+						if feature == 'contractLastSeen':
+							self.setAccFeat(contract, i, timestamp)
+						if feature == 'contractAge' and new:
+							self.setAccFeat(contract, i, timestamp)
+
 			inVolume = {}
 			outVolume = {}
 			avgValue = {}
 			numTxs = {}
 
-			for tx in txs.itertuples():
-				try:
-					sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
-								#due to it being a python keyword. Beware, this will break if the raw data changes.
-				except AttributeError:
-					print(tx) #debug info to change the attribute
-					raise
+			if not self.ignoreTx:
+				for tx in txs.itertuples():
+					try:
+						sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
+									#due to it being a python keyword. Beware, this will break if the raw data changes.
+					except AttributeError:
+						print(tx) #debug info to change the attribute
+						raise
 
-				receiver = tx.to
+					#we are going to use contract aliasing, if the receiver is a contract and has an alias
 
-				if type(receiver) == float and math.isnan(receiver):
-					receiver = None #receiver is None when the TX is contract publishing
+					if self.unifyContracts:
+						if tx.hash in hashMap: #if the hashes match
+							if tx.to != hashMap[tx.hash]: #if the addresses are different
+								self.contractAlias[tx.to] = hashMap[tx.hash] #make the connection
+								if debug:
+									print("Alias from %s to %s because of TX %s" % (tx.to, hashMap[tx.hash], tx.hash))
 
-				if self.useCache:
-					self.groupCache[sender] = None #clear the cache for this person, as their feature values will change
-					if receiver is not None:
-						self.groupCache[receiver] = None
+					receiver = self.contractAlias.get(tx.to, tx.to) #if it is a contract and we have an alias, we will use that.
+					#otherwise, use whatever currently given
 
-				timestamp = tx.date.value // 10**9 #EPOCH time
+					if type(receiver) == float and math.isnan(receiver):
+						receiver = None #receiver is None when the TX is contract publishing
 
-				self.lastTimestamp = max(self.lastTimestamp, timestamp)
-
-				for i, feature in enumerate(self.features):
-					val = float(tx.value)
-
-					if int(val) != val:
-						raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
-					val = int(val)
-
-					if feature == 'balance':
+					if self.useCache:
+						self.groupCache[sender] = None #clear the cache for this person, as their feature values will change
 						if receiver is not None:
-							self.addAccFeat(receiver, i, val)				
-						self.subAccFeat(sender, i, val)
+							self.groupCache[receiver] = None
 
-					if feature == 'contractBalance': #track the balance of contracts
-						if sender in self.contracts:
+					timestamp = tx.date.value // 10**9 #EPOCH time
+
+					self.lastTimestamp = max(self.lastTimestamp, timestamp)
+
+					for i, feature in enumerate(self.features):
+						val = float(tx.value)
+
+						if int(val) != val:
+							raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
+						val = int(val)
+
+						if feature == 'balance':
+							if receiver is not None:
+								self.addAccFeat(receiver, i, val)				
 							self.subAccFeat(sender, i, val)
-						if receiver in self.contracts:
-							self.addAccFeat(receiver, i, val)
 
-					if feature == 'contractInVolume':
-						if receiver in self.contracts:
-							inVolume.setdefault(receiver, 0)
-							inVolume[receiver] = inVolume[receiver] + val
+						if feature == 'contractBalance': #track the balance of contracts
+							if sender in self.contracts:
+								self.subAccFeat(sender, i, val)
+							if receiver in self.contracts:
+								self.addAccFeat(receiver, i, val)
 
-					if feature == 'contractOutVolume':
-						if sender in self.contracts:
-							print("Outgoing transaction from %s with value %d and TX hash" % (sender, val, tx.hash))
-							outVolume.setdefault(sender, 0)
-							outVolume[sender] += val
+						if feature == 'contractInVolume':
+							if receiver in self.contracts:
+								inVolume.setdefault(receiver, 0)
+								inVolume[receiver] = inVolume[receiver] + val
 
-					if feature == 'contractTx' or feature == 'contractAvgValue': #avgTxValue needs the amount of transactions
-						if receiver in self.contracts:
-							numTx.setdefault(receiver, 0)
-							numTx[receiver] += 1
-						#TODO: What about outgoing transactions?
-					if feature == 'contractAvgValue':
-						if receiver in self.contracs:
-							avgVal.setdefault(receiver, 0)
-							avgVal[receiver] += val
-						#TODO: Outgoing?
-					if feature == 'lastSeen':
-						if receiver is not None: 
-							self.setAccFeat(receiver, i, timestamp)
-						self.setAccFeat(sender, i, timestamp)
-			if 'contractTx' in self.features:
-				for contract in numTx:
-					#method of keeping only the sum of the values for previous x time ticks:
-					#self.subAccFeat ... 
-					#self.addAccFeat(contract, self.features.index('contractTx'), numTx[contract])
-					self.setAccFeat(contract, self.features.index('contractTx'), numTx[contract])
-			if 'contractAvgValue' in self.features:
-				for contract in avgValue:
-					self.setAccFeat(contract, self.features.index('contractAvgValue'), avgValue[contract] / numTx[contract])
-			if 'contractInVolume' in self.features:
-				for contract in inVolume:
-					self.setAccFeat(contract, self.features.index('contractInVolume'), inVolume[contract])
-			if 'contractOutVolume' in self.features:
-				for contract in outVolume:
-					self.setAccFeat(contract, self.features.index('contractOutVolume'), outVolume[contract])
+						if feature == 'contractOutVolume':
+							if sender in self.contracts:
+								print("Outgoing transaction from %s with value %d and TX hash" % (sender, val, tx.hash))
+								outVolume.setdefault(sender, 0)
+								outVolume[sender] += val
+
+						if feature == 'contractTx' or feature == 'contractAvgValue': #avgTxValue needs the amount of transactions
+							if receiver in self.contracts:
+								numTx.setdefault(receiver, 0)
+								numTx[receiver] += 1
+							#TODO: What about outgoing transactions?
+						if feature == 'contractAvgValue':
+							if receiver in self.contracs:
+								avgVal.setdefault(receiver, 0)
+								avgVal[receiver] += val
+							#TODO: Outgoing?
+						if feature == 'lastSeen':
+							if receiver is not None: 
+								self.setAccFeat(receiver, i, timestamp)
+							self.setAccFeat(sender, i, timestamp)
+				if 'contractTx' in self.features:
+					for contract in numTx:
+						#method of keeping only the sum of the values for previous x time ticks:
+						#self.subAccFeat ... 
+						#self.addAccFeat(contract, self.features.index('contractTx'), numTx[contract])
+						self.setAccFeat(contract, self.features.index('contractTx'), numTx[contract])
+				if 'contractAvgValue' in self.features:
+					for contract in avgValue:
+						self.setAccFeat(contract, self.features.index('contractAvgValue'), avgValue[contract] / numTx[contract])
+				if 'contractInVolume' in self.features:
+					for contract in inVolume:
+						self.setAccFeat(contract, self.features.index('contractInVolume'), inVolume[contract])
+				if 'contractOutVolume' in self.features:
+					for contract in outVolume:
+						self.setAccFeat(contract, self.features.index('contractOutVolume'), outVolume[contract])
 		else:
 			print("Running group assignments with fake data.")
 
