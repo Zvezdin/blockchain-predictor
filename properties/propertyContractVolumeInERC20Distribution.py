@@ -17,7 +17,7 @@ class PropertyContractVolumeInERC20Distribution(PropertyAccountNumberDistributio
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "contractVolumeInERC20Distribution_log2"
+		self.name = "contractVolumeInERC20Distribution_log2_v2_stateless"
 
 		self.contractData = True
 
@@ -49,6 +49,9 @@ class PropertyContractVolumeInERC20Distribution(PropertyAccountNumberDistributio
 			raise NotImplementedError
 
 	def createDistribution(self):
-		return np.array(cpp.createDistribution(self.lastTimestamp)) #use C++ backend
+		res = np.array(cpp.createDistribution(self.lastTimestamp)) #use C++ backend
+		print("Number of contracts is %d." % (cpp.len()))
+		cpp.clear() #clear the state
+		return res
 
 	#the rest of the logic is inherited from the base class
