@@ -18,6 +18,10 @@ class NeuralNetwork(abc.ABC):
 	def predict(self, dataset):
 		"""Runs the deep network and returns predictions on this dataset"""
 
+	@abc.abstractmethod
+	def evaluate(self, dataset):
+		"""Evaluates the performance on a certain dataset based on multiple factors."""
+
 	@staticmethod
 	def accuracy(predictions, labels):
 		return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
@@ -46,9 +50,21 @@ class NeuralNetwork(abc.ABC):
 	@staticmethod
 	def sign_accuracy(labels, prediction):
 		correct_signs = 0.0
+		absolutePrices = True
+
+		if np.sum(labels[labels<0]) != 0: #if we have signed prices
+			absolutePrices = False #they are relative
+
 		for i in range(len(labels)):
-			if (labels[i] >= 0.5 and prediction[i] >= 0.5) or (labels[i] < 0.5 and prediction[i] < 0.5):
-				correct_signs += 1
+			if not absolutePrices:
+				if (labels[i] >= 0.5 and prediction[i] >= 0.5) or (labels[i] < 0.5 and prediction[i] < 0.5):
+					correct_signs += 1
+			else:
+				if i == 0:
+					continue
+				else:
+					if (labels[i] - labels[i-1]) * (prediction[i] - prediction[i-1]) > 0: #if the sign of the change is the same
+						correct_signs += 1
 		
 		correct_signs /= len(labels)
 
@@ -80,6 +96,7 @@ class NeuralNetwork(abc.ABC):
 
 	@staticmethod
 	def scorePrediction(prediction, labels, kind, num_targets):
+		results = []
 		for target in range(num_targets):
 			score = {}
 			sign = {}
@@ -94,6 +111,10 @@ class NeuralNetwork(abc.ABC):
 
 			print("Scores for %s." % kind)
 			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
+
+			results.append({'score': score, 'sign': sign, 'custom': custom, 'R2': R2})
+
+		return results
 
 	@staticmethod
 	def plotModel(model):
