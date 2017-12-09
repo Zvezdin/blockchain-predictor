@@ -135,6 +135,7 @@ def simulateTrading(prediction, actual, startBalance):
 
 def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'test'):
 	plt.clf() #clear figure
+	plt.figure(figsize=(16*2, 9*2))
 
 	nPlots = actual.shape[1]
 
@@ -151,7 +152,7 @@ def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'te
 		plt.show()
 	else:
 		filename = "data/results/%s_%s.svg" % (str(dt.now()), setType)
-		plt.savefig(filename, dpi = 1500)
+		plt.savefig(filename)
 		print("Saved accuracy graph at %s." % filename)
 
 if __name__ == "__main__": #if this is the main file, parse the command args
