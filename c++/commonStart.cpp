@@ -25,14 +25,22 @@ typedef std::map<acc, feat> accMap;
 
 namespace py = pybind11;
 
-const int group0 = int(SCALE(static_cast<castFloat>(max0) * SCALE_MUL)); //our group counts are dynamic and depend on our max values
-const int group1 = int(SCALE(static_cast<castFloat>(max1) * SCALE_MUL));
-
-typedef std::array<std::array<featType, group1>, group0> result;
-
 castFloat linearScale(castFloat x){
 	return x;
 }
+
+const castFloat log10_base_1_2 = log10(1.2);
+
+castFloat log1_2(castFloat x){
+    return log10(x);
+}
+
+const int group0 = int(SCALE(static_cast<castFloat>(max0) * SCALE_MUL) / SCALE(BASE)); //our group counts are dynamic and depend on our max values
+const int group1 = int(SCALE(static_cast<castFloat>(max1) * SCALE_MUL) / SCALE(BASE));
+
+const castFloat scaleBase = SCALE(BASE);
+
+typedef std::array<std::array<featType, group1>, group0> result;
 
 accMap accounts;
 
@@ -49,7 +57,7 @@ result createDistribution(int lastTimestamp){
 			if(maxCutoff0) continue;
 			arg0 = group0-1;
 		} else{
-			arg0 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(it.second[0]) * SCALE_MUL)), group0-1);
+			arg0 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(it.second[0]) * SCALE_MUL) / scaleBase), group0-1);
 		}
 
 		featType val;
@@ -66,7 +74,7 @@ result createDistribution(int lastTimestamp){
 			if(minCutoff1) continue;
 			arg1 = 0;
 		} else {
-			arg1 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(val) * SCALE_MUL)), group1-1);
+			arg1 = std::min(static_cast<int>(SCALE(static_cast<castFloat>(val) * SCALE_MUL) / scaleBase), group1-1);
 		}
 
 		res[arg0][arg1] ++;
