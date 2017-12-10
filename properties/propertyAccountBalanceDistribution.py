@@ -1,8 +1,6 @@
 from property import Property
 
-import pickle
-import io
-import codecs
+import math
 
 import numpy as np
 
@@ -14,11 +12,13 @@ class PropertyAccountBalanceDistribution(Property):
 		self.requires = ['tx']
 		self.requiresHistoricalData  = True
 		self.accounts = {}
-		self.tickCount = 10
-		self.maxBalance = 0
+		self.balanceCutoff = 100000000000000000 # -> 0.1ETH
+		self.maxBalance = 1000000000000000000000000 // self.balanceCutoff #1M ETH
 		self.subPropertyCount = 3 #vol to, vol from, tx count
 
-		self.scalingFunction = self.scaleLog #or self.noScaling
+		self.scalingFunction = math.log2
+
+		self.tickCount = int(self.scalingFunction(self.maxBalance))
 
 	def processTick(self, data):
 		txs = data['tx']
@@ -34,7 +34,7 @@ class PropertyAccountBalanceDistribution(Property):
 				raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
 			val = int(val)
 
-			sender = tx._2 #the field is named 'from', but it is renamed to its index in the tuple
+			sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
 							#due to it being a python keyword. Beware, this will break if the raw data changes.
 			receiver = tx.to
 
@@ -54,29 +54,26 @@ class PropertyAccountBalanceDistribution(Property):
 			else:
 				self.accounts[sender] = 0
 
-			if sender == '0x35da6AbcB08F2b6164fE380BB6c47BD8F2304d55'.lower() or receiver == '0x35da6AbcB08F2b6164fE380BB6c47BD8F2304d55'.lower():
-				print("DEBUG:")
-				print("Transaction with test account", tx)
-				print("Current balance is %d." % self.accounts['0x35da6AbcB08F2b6164fE380BB6c47BD8F2304d55'.lower()])
-
-		#update the max balance
-		self.maxBalance = self.scalingFunction(max(self.accounts.values()))
-
 		if self.maxBalance != 0:
 			for tx in txs.itertuples():
 
 				val = float(tx.value)
-				sender = tx._2
+				sender = tx._3
 				receiver = tx.to
-				fromBal = self.scalingFunction(self.accounts[sender])
-				toBal = self.scalingFunction(self.accounts[receiver])
 
-				fromI = min(int((fromBal / self.maxBalance) * self.tickCount), self.tickCount-1)
-				toI = min(int((toBal / self.maxBalance) * self.tickCount), self.tickCount-1)
+				fromBal = 0
+				if self.accounts[sender] > self.balanceCutoff:
+					fromBal = self.scalingFunction(self.accounts[sender] / self.balanceCutoff)
+				toBal = 0
+				if self.accounts[receiver] > self.balanceCutoff:
+					toBal = self.scalingFunction(self.accounts[receiver] / self.balanceCutoff)
+
+				fromI = min(int(fromBal), self.tickCount-1)
+				toI = min(int(toBal), self.tickCount-1)
 
 
-				res[0][toI] += val #value to
-				res[1][fromI] += val#value from
+				res[0][toI] += val / self.balanceCutoff #value to in ETH
+				res[1][fromI] += val / self.balanceCutoff #value from in ETH
 				res[2][fromI] += 1 #tx count
 
 		return res
