@@ -1,5 +1,6 @@
 #define MODULE_NAME cppBalanceLastSeen
-#define SCALE log2
+#define SCALE log10
+#define BASE 1.2
 
 typedef int featType;
 const featType max0(10000000); //Max Bal for scale, in ETH / 10
