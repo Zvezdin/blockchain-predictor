@@ -4,11 +4,12 @@ import math
 
 import numpy as np
 
+log10_1_2base = math.log10(1.2)
 
 class PropertyAccountBalanceDistribution(Property):
 	def __init__(self):
 		super().__init__()
-		self.name = "accountBalanceDistribution"
+		self.name = "accountBalanceDistribution_log1_2"
 		self.requires = ['tx']
 		self.requiresHistoricalData  = True
 		self.accounts = {}
@@ -16,9 +17,12 @@ class PropertyAccountBalanceDistribution(Property):
 		self.maxBalance = 1000000000000000000000000 // self.balanceCutoff #1M ETH
 		self.subPropertyCount = 3 #vol to, vol from, tx count
 
-		self.scalingFunction = math.log2
+		self.scalingFunction = self.log1_2
 
 		self.tickCount = int(self.scalingFunction(self.maxBalance))
+
+	def log1_2(self, x):
+		return math.log10(x) / log10_1_2base
 
 	def processTick(self, data):
 		txs = data['tx']
