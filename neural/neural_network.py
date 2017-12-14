@@ -46,18 +46,22 @@ class NeuralNetwork(abc.ABC):
 	@staticmethod
 	def RMSE(labels, prediction):
 		return math.sqrt(mean_squared_error(labels, prediction))
-	
+
 	@staticmethod
 	def sign_accuracy(labels, prediction):
+		relative_zero = 0.0 #constant, depends on the dataset type and cannot be easily retrieved
+
 		correct_signs = 0.0
 		absolutePrices = True
 
-		if np.sum(labels[labels<0]) != 0: #if we have signed prices
+		if len(labels[labels<0]) > len(labels) * 0.07: #if the negative values are more than 7% of all values
 			absolutePrices = False #they are relative
+
+		print("Working with %s values." % ('absolute' if absolutePrices else 'relative'))
 
 		for i in range(len(labels)):
 			if not absolutePrices:
-				if (labels[i] >= 0.5 and prediction[i] >= 0.5) or (labels[i] < 0.5 and prediction[i] < 0.5):
+				if (labels[i] >= relative_zero and prediction[i] >= relative_zero) or (labels[i] < relative_zero and prediction[i] < relative_zero):
 					correct_signs += 1
 			else:
 				if i == 0:
