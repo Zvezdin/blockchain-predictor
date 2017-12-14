@@ -1,7 +1,13 @@
 import pickle
 import argparse
 import dateutil.parser
+import os
+import os.path
+import time
 
+import matplotlib as mpl
+#mpl.use('Agg')
+import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
@@ -15,10 +21,47 @@ def plot(values, datesm, title=''):
 		plt.title(title)
 		plt.show()
 
-def plotImage(val):
+def plotImage(val, filename=None):
+	if filename is not None and os.path.isfile(filename):
+		return #no need to re-render if it already exists
+	plt.clf()
 	plt.imshow(val, interpolation="nearest")
 	plt.colorbar()
-	plt.show()
+	if filename is None:
+		plt.show()
+	else:
+		print("Saving file %s." % filename)
+		plt.savefig(filename)
+
+def createAnimation(frames, dates):
+	fig = plt.figure()
+	ax = fig.add_subplot(111)
+
+	ims = []
+
+	#for i, frame in enumerate(frames):
+	#	im = plt.imshow(frame, animated=True)
+	#	tit = plt.annotate(str(dates[i]), (-1,-1), animated=True)
+	#	#cb = plt.colorbar()
+	#	ims.append([im, tit])
+	cv0 = frames[0]
+	im = ax.imshow(cv0, origin='lower') # Here make an AxesImage rather than contour
+	cb = fig.colorbar(im)
+	tx = ax.set_title(str(dates[0]))
+
+	def animate(i):
+		arr = frames[i]
+		vmax     = np.max(arr)
+		vmin     = np.min(arr)
+		im.set_data(arr)
+		im.set_clim(vmin, vmax)
+		tx.set_text(str(dates[i]))
+
+	ani = animation.FuncAnimation(fig, animate, frames=len(frames), interval=1)
+
+	global args
+
+	ani.save(args.renderTimelapse+'/'+args.data+'.mp4')
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	np.set_printoptions(precision=3, linewidth=180)
@@ -32,6 +75,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--frame', dest='frame', action='store_true', help='Display single frame values')
 	parser.add_argument('--trim', dest='trim', action='store_true', help='A frame can be trimmed from values on Y=0 and X=end.')
 	parser.add_argument('--log2', dest='log2', action='store_true', help='Scale all account counts by a log2.')
+	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as images in the specified director.')
 	parser.set_defaults(frame=False)
 	parser.set_defaults(trim=False)
 	parser.set_defaults(log2=False)
@@ -81,8 +125,13 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		if type(values[0]) != np.ndarray:
 			plot(values, dates, 'Value of '+prop)
 		else: #if we are dealing with complex property, visualize it
-			for i in range(1, 10*1, 1):
-				val = values[-i]
+			if args.renderTimelapse is not None:
+				rangeGen = range(len(values))
+				frames = []
+			else:
+				rangeGen = range(len(values)-1, len(values))
+			for i in rangeGen:
+				val = values[i]
 				print(val.shape)
 
 				if args.trim:
@@ -96,12 +145,16 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					val[val<0] = 0 #log if 0 is -inf
 
 				print(val.shape)
-				date = dates[-i]
+				date = dates[i]
 
 				if len(val.shape) != 2:
 					print("ERROR: Unsupported property value format with shape %s. Supported shapes are 2D." % str(val.shape))
-				else:
+				elif args.renderTimelapse is None:
 					print(val)
 					print(val.shape)
 					print(date)
 					plotImage(val)
+				else:
+					frames.append(val)
+			if args.renderTimelapse is not None:
+				createAnimation(frames, dates)
