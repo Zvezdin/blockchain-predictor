@@ -31,6 +31,8 @@ class MatrixModel(DatasetModel):
 			args['blacklistTarget'] = True
 		if 'invert' not in args:
 			args['invert'] = False
+		args.setdefault('normalizationLevel', 'pixel') #or 'layer', 'pixel'
+		args.setdefault('normalizationStd', 'local') #or 'global'
 
 		propertyValues = None
 		targetData = None
@@ -56,7 +58,7 @@ class MatrixModel(DatasetModel):
 				v = np.reshape(v, (v.shape[0], 1))
 
 			#we have the property values. Normalize or not.
-			if args['normalize']:
+			if args['normalize'] and args['normalizationLevel'] == 'property':
 				normalization = args['normalization'].get(propName, args['defaultNormalization'])
 				if propName not in args['localNormalize']: #local normalization happens via another way
 					print("Globally normalizing property %s with method %s." % (propName, normalization))
@@ -84,6 +86,29 @@ class MatrixModel(DatasetModel):
 			print(propertyValues.shape)
 
 		allDates = properties[0]['date']
+
+
+		if args['normalize'] and args['normalizationLevel'] == 'pixel':
+			meanFrame = np.ndarray((propertyValues.shape[1]))
+			stdFrame = np.ndarray(meanFrame.shape)
+
+			for i in range(propertyValues.shape[1]):
+				meanFrame[i] = np.mean(propertyValues[:, i])
+				stdFrame[i] = np.std(propertyValues[:, i])
+			for i in range(propertyValues.shape[0]):
+				propertyValues[i, :] = propertyValues[i, :] - meanFrame
+
+			if args['normalizationStd'] == 'local':
+				propertyValues = np.divide(propertyValues, stdFrame, where=stdFrame!=0)
+			elif args['normalizationStd'] == 'global':
+				propertyValues = propertyValues / np.std(propertyValues)
+			else:
+				raise ValueError("Unknown setting for normalizationStd - %s" % (args['normalizationStd']))
+
+			print("Generating target data with mean %d" % np.mean(targetData))
+
+			targetData = targetData - np.mean(targetData)
+			targetData = targetData / np.std(targetData)
 
 
 		print(targetData)

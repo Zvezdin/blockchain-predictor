@@ -17,6 +17,8 @@ class StackedModel(DatasetModel):
 		#argument defaults
 		args.setdefault('window', 1)
 		args.setdefault('normalize', True)
+		args.setdefault('normalizationLevel', 'pixel') #or 'layer', 'pixel'
+		args.setdefault('normalizationStd', 'local') #or 'global'
 		args.setdefault('target', ['highPrice_rel'])
 		args.setdefault('localNormalize', [None])
 		args.setdefault('defaultNormalization', 'basic')
@@ -26,7 +28,7 @@ class StackedModel(DatasetModel):
 		args.setdefault('invert', False)
 
 		args.setdefault('width', 24)
-		args.setdefault('height', 23)
+		args.setdefault('height', 1)
 		args.setdefault('flexible', True) #if the height of the image can be expanded if the chosen properties don't fit
 
 		propertyValues = np.ndarray((properties[0].shape[0], args['width'], args['height']))
@@ -59,7 +61,7 @@ class StackedModel(DatasetModel):
 			if debug: print("Debug v2", v.shape)
 
 			#we have the property values. Normalize or not.
-			if args['normalize']:
+			if args['normalize'] and args['normalizationLevel'] == 'property':
 				normalization = args['normalization'].get(propName, args['defaultNormalization'])
 				if propName not in args['localNormalize']: #local normalization happens via another way
 					print("Globally normalizing property %s with method %s." % (propName, normalization))
@@ -113,7 +115,30 @@ class StackedModel(DatasetModel):
 
 		allDates = properties[0]['date']
 
-		if debug: print("Shape of property values is %s." % str(propertyValues.shape))
+		if debug: print("Shape of property values is %s." % str(propertyValues.shape)) #(samples,H,W)
+
+		if args['normalize'] and args['normalizationLevel'] == 'pixel':
+			meanFrame = np.ndarray((propertyValues.shape[1], propertyValues.shape[2]))
+			stdFrame = np.ndarray(meanFrame.shape)
+
+			for i in range(propertyValues.shape[1]):
+				for j in range(propertyValues.shape[2]):
+					meanFrame[i,j] = np.mean(propertyValues[:, i, j])
+					stdFrame[i,j] = np.std(propertyValues[:, i, j])
+			for i in range(propertyValues.shape[0]):
+				propertyValues[i, :, :] -= meanFrame
+
+			if args['normalizationStd'] == 'local':
+				propertyValues = np.divide(propertyValues, stdFrame, where=stdFrame!=0)
+			elif args['normalizationStd'] == 'global':
+				propertyValues = propertyValues / np.std(propertyValues)
+			else:
+				raise ValueError("Unknown setting for normalizationStd - %s" % (args['normalizationStd']))
+
+			print("Generating target data with mean %d" % np.mean(targetData))
+
+			targetData = targetData - np.mean(targetData)
+			targetData = targetData / np.std(targetData)
 
 		print(targetData, targetData.shape)
 
