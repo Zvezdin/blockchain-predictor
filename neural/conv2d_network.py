@@ -11,7 +11,9 @@ from sklearn.metrics import mean_squared_error
 class Conv2DNetwork(NeuralNetwork):
 	def __init__(self):
 		self.name="Conv2D"
-		self.invertLabels = True
+		self.invertLabels = False
+		self.model = None
+		self.datasetCache = None
 
 	def train(self, givenDataset, givenLabels, args = {}):
 		dataset = {}
@@ -35,6 +37,7 @@ class Conv2DNetwork(NeuralNetwork):
 			args['lr'] = 0.0001
 		if 'kernel' not in args:
 			args['kernel'] = 3
+		args.setdefault('randomData', False)
 
 		#remove any zero-size LSTM/dense layers
 		for arr in [args['CONV'], args['dense']]:
@@ -51,10 +54,17 @@ class Conv2DNetwork(NeuralNetwork):
 			if len(givenDataset[kind].shape) == 3:
 				#reshape from N,time_steps,features to N,time_steps,features,1
 				dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1], givenDataset[kind].shape[2], 1))
+
 			elif len(givenDataset[kind].shape) == 4:
 				#reshape from N,time_steps,height,width to N,height,width,time_steps
 				dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[2], givenDataset[kind].shape[3], givenDataset[kind].shape[1]))
+			
+			if args['randomData']:
+				dataset[kind] = np.random.rand(*dataset[kind].shape)
+
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
+
+		self.datasetCache = dataset
 
 		height = dataset['train'].shape[1]
 		width = dataset['train'].shape[2]
@@ -63,43 +73,43 @@ class Conv2DNetwork(NeuralNetwork):
 		except IndexError:
 			channels = 1
 
-		model = Sequential()
-		#model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', input_shape=(time_steps, features, 1), name='32_1'))
-		#model.add(Activation('relu', name='ReLU_1'))
-		#model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), name='32_2'))
-		#model.add(Activation('relu', name='ReLU_2'))
-		##model.add(MaxPooling2D(pool_size=(2, 2)))
-		#model.add(Dropout(0.25, name='0.25_1'))
+		self.model = Sequential()
+		self.model.add(Conv2D(32, (args['kernel'], args['kernel']), padding='same', input_shape=(height, width, channels), name='32_1'))
+		self.model.add(Activation('relu', name='ReLU_1'))
+		self.model.add(Conv2D(32, (args['kernel'], args['kernel']), name='32_2'))
+		self.model.add(Activation('relu', name='ReLU_2'))
+		self.model.add(MaxPooling2D(pool_size=(2, 2)))
+		self.model.add(Dropout(0.25, name='0.25_1'))
+		
+		self.model.add(Conv2D(int(32 * sizeModifier), (args['kernel'], args['kernel']), padding='same', name='32_3', ))#input_shape=(height, width, channels)))
+		self.model.add(Activation('relu', name='ReLU_3'))
+		self.model.add(Conv2D(int(64 * sizeModifier), (args['kernel'], args['kernel']), name='64'))
+		self.model.add(Activation('relu', name='ReLU_4'))
+		self.model.add(MaxPooling2D(pool_size=(2, 2)))
+		self.model.add(Dropout(0.25, name='0.25_2'))
 
-		model.add(Conv2D(32 // sizeModifier, (args['kernel'], args['kernel']), padding='same', name='32_3', input_shape=(height, width, channels)))
-		model.add(Activation('relu', name='ReLU_3'))
-		model.add(Conv2D(64 // sizeModifier, (args['kernel'], args['kernel']), name='64'))
-		model.add(Activation('relu', name='ReLU_4'))
-		#model.add(MaxPooling2D(pool_size=(2, 2)))
-		model.add(Dropout(0.25, name='0.25_2'))
-
-		model.add(Flatten())
-		model.add(Dense(512 // sizeModifier, name='512'))
-		model.add(Activation('relu', name='ReLU_5'))
-		model.add(Dropout(0.5, name='0.5'))
-		model.add(Dense(self.num_targets, name='1'))
-		model.add(Activation('linear', name='Linear'))
+		self.model.add(Flatten())
+		self.model.add(Dense(512, name='512'))
+		self.model.add(Activation('relu', name='ReLU_5'))
+		self.model.add(Dropout(0.5, name='0.5'))
+		self.model.add(Dense(self.num_targets, name='1'))
+		self.model.add(Activation('linear', name='Linear'))
 
 		#opt = Adam(args['lr'])
 
 		opt = rmsprop(lr=args['lr'], decay=1e-6)
 
-		model.compile(loss='mean_squared_error', optimizer=opt)
+		self.model.compile(loss='mean_squared_error', optimizer=opt)
 
-		self.plotModel(model)
+		self.plotModel(self.model)
 
-		model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=False)
+		self.model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=False)
 
 		# make predictions
 		self.prediction = {}
 
-		self.prediction['train'] = model.predict(dataset['train'], batch_size=args['batch'])
-		self.prediction['test'] = model.predict(dataset['test'], batch_size=args['batch'])
+		self.prediction['train'] = self.model.predict(dataset['train'], batch_size=args['batch'])
+		self.prediction['test'] = self.model.predict(dataset['test'], batch_size=args['batch'])
 
 		print(self.prediction['test'].shape)
 
@@ -110,5 +120,8 @@ class Conv2DNetwork(NeuralNetwork):
 
 	def predict(self, setType):
 		if self.invertLabels:
-			return 1-self.prediction[setType]
-		return self.prediction[setType]
+			return 1-self.model.predict(self.datasetCache[setType])
+		return self.model.predict(self.datasetCache[setType])
+
+	def evaluate(self, setType):
+		return self.scorePrediction(self.predict(setType))
