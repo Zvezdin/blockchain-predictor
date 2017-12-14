@@ -3,26 +3,36 @@ import os.path
 
 import dataset_generator as gen
 
-#python dataset_generator.py --model stacked highPrice_rel,balanceLastSeenDistribution_log2 --start 2017-03-01 --filename --ratio 1:6:1 --labels full --no-shuffle
-
 def run(group, folder):
 	if group == 'distributions':
 		directory = folder + group + '/'
 
-		widths = [24, 24, 18]
+		widths = [24, 24, 18, 23, 92, 92, 68, 88,48]
+		slices = {3: [':', ':'], 7: [':', ':']} #accBalDistr doesn't need a cutoff
+		distributions1 = ['balanceLastSeenDistribution_cpp_log2', 'contractBalanceLastSeenDistribution_log2_v2', 'contractVolumeInERC20Distribution_log2_v2_stateless', 'accountBalanceDistribution']
 
-		for i, distribution in enumerate(['balanceLastSeenDistribution_cpp_log2', 'contractBalanceLastSeenDistribution_log2_v2', 'contractVolumeInERC20Distribution_log2_v2_stateless']):
-			for suffix in ['', '_rel']:
+		distributions2 =['balanceLastSeenDistribution_log1_2', 'contractBalanceLastSeenDistribution_log1_2_v2', 'contractVolumeInERC20Distribution_log1_2_v2_stateless', 'accountBalanceDistribution_log1_2']
+		distributions = []
+		distributions.extend(distributions1)
+		#distributions.extend(distributions2)
+		distributions.append(str.join(',', distributions1)) #append all other distributions, concatenated into a string
+		distributions.append(str.join(',', distributions2))
+
+		for i, distribution in enumerate(distributions):
+			for suffix in ['']:#, '_rel']: we found that relative values don't help
 				distribution += suffix
 
-				for target in ['highPrice_rel', 'highPrice']:
+				for target in ['highPrice_rel', 'highPrice', 'uniqueAccounts', 'uniqueAccounts_rel']:
 					for model in ['stacked', 'matrix']:
-						for window in [1, 5, 24, 104]:
-							filename = directory + model + '-' + distribution + '-' + target + '-' + str(window)+'w' + '.pickle'
-							if not os.path.exists(filename): #no need to waste writes if already written
-								gen.run(model, target+','+distribution, '2017-03-01', None, filename, 'full', '1:6:1', False,\
-								{'window': window, 'target': [target], 'normalization': {}, 'defaultNormalization': 'auto', 'blacklistTarget': True, 'width': widths[i]},\
-								{distribution: {'scale': 'log2', 'slices': [':', '1:']}})
+						for normStd in ['global']:#, 'local']:
+							for window in [1, 5, 24, 104]:
+								filename = directory + model + '-' + distribution + '-' + target + '-' + normStd + '-' + str(window)+'w' + '.pickle'
+								if not os.path.exists(filename): #no need to waste writes if already written
+									print("Generating dataset %s." % filename)
+									gen.run(model, target+','+distribution, '2017-03-01', None, filename, 'full', '1:6:1', False,\
+									{'window': window, 'target': [target], 'normalization': {}, 'defaultNormalization': 'auto', 'blacklistTarget': True, 'width': widths[i],\
+									'normalizationLevel': 'pixel', 'normalizationStd': normStd},\
+									{distribution: {'scale': 'log2', 'slices': slices.get(i, [':', '1:'])}}) #last line will break if there is more than one distribution
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Automatically generates a group of datasets with predefined parameters.")
