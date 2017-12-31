@@ -17,7 +17,7 @@ class PropertyContractBalanceLastSeenDistribution(PropertyAccountNumberDistribut
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "contractBalanceLastSeenDistribution_log2_v2"
+		self.name = "contractBalanceLastSeenDistribution_log1_2_v2"
 
 		self.contractData = True
 

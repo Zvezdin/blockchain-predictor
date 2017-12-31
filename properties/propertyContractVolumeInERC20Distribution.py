@@ -17,7 +17,7 @@ class PropertyContractVolumeInERC20Distribution(PropertyAccountNumberDistributio
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "contractVolumeInERC20Distribution_log2_v2_stateless"
+		self.name = "contractVolumeInERC20Distribution_log1_2_v2_stateless"
 
 		self.contractData = True
 

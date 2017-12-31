@@ -17,7 +17,7 @@ class PropertyBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 	"""
 	def __init__(self):
 		super().__init__()
-		self.name = "balanceLastSeenDistribution_log2"
+		self.name = "balanceLastSeenDistribution_log1_2"
 
 		self.features = ['balance', 'lastSeen']
 		self.max = [0, 0] #our real maximum values are in the C++ backend
