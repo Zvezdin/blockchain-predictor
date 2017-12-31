@@ -34,6 +34,9 @@ labelKey = 'closePrice'
 def generateDataset(modelName, propertyNames, labelsType, start=None, end=None, args = {}, preprocess = {}):
 	print("Generating dataset for properties ", propertyNames, "and using model", modelName, "for range", start, end)
 
+	while '' in propertyNames:
+		propertyNames.remove('')
+
 	model = None
 
 	#get the model instance
