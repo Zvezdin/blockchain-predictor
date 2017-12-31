@@ -32,7 +32,7 @@ def randomizeDataset(dataset, labels, dates):
 	shuffled_dates = dates[permutation]
 	return shuffled_dataset, shuffled_labels, shuffled_dates
 
-def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
+def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, loadModel = None, quiet = False, shuffle = True, trim = False):
 
 	#load the datasets
 	rawDataset = loadDataset(datasetFile)
@@ -72,7 +72,12 @@ def run(datasetFile, models, modelArgs, quiet, shuffle, trim):
 		print("Starting to train and evaluate the following networks: ", [net.name for net in selectedModels])
 
 	for model in selectedModels:
-		model.train(dataset, labels, modelArgs)
+		history = model.train(dataset, labels, modelArgs, loadModel=loadModel)
+
+		if saveModel is not None:
+			model.save(saveModel+'.h5')
+			with open(saveModel+'.pickle', 'wb') as f:
+				pickle.dump(history, f, pickle.HIGHEST_PROTOCOL)
 
 	if not quiet:
 		print("Trained the networks.")
@@ -162,6 +167,10 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--args', type=str, help="A list of arguments to be passed on to the models. In the format key1=value1,key2=value2.1;value2.2")
 	parser.add_argument('--quiet', dest='quiet', action="store_true", help="Do not plot graphs, but save them as images.")
 	parser.set_defaults(quiet=False)
+	parser.add_argument('--saveImg', dest='saveImg', action="store_true", help="Plot the model test and train performance on a graph and save it as a file.")
+	parser.set_defaults(saveImg=False)
+	parser.add_argument('--saveModel', type=str, help="Location to save the model architecture, weights, training history and evaluation scores. DO NOT include file extension, just filename!")
+	parser.add_argument('--loadModel', type=str, help="Location to to load a saved model architecture, weights, training history and evaluation scores. Include the file extension!")
 	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=False)
 	parser.add_argument('--trim-batch', dest='trim', action="store_true", help="Trim each dataset so that its length is divisible by the batch size.")
@@ -188,4 +197,4 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	print("Processed model arguments", modelArgs)
 
-	run(args.dataset, givenModels, modelArgs, args.quiet, args.shuffle, args.trim)
+	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveImg=args.saveImg, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim)
