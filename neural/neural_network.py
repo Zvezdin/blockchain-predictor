@@ -4,6 +4,8 @@ import numpy as np
 import math
 from sklearn.metrics import mean_squared_error
 from keras.utils import plot_model
+from keras import backend as K
+from keras.models import load_model
 
 class NeuralNetwork(abc.ABC):
 
@@ -11,7 +13,7 @@ class NeuralNetwork(abc.ABC):
 		self.name = ""
 
 	@abc.abstractmethod
-	def train(self, dataset, labels, args = {}):
+	def train(self, dataset, labels, args = {}, loadModel = None):
 		"""A method that trains the neural network instance on the certain dataset and labels"""
 
 	@abc.abstractmethod
@@ -21,6 +23,10 @@ class NeuralNetwork(abc.ABC):
 	@abc.abstractmethod
 	def evaluate(self, dataset):
 		"""Evaluates the performance on a certain dataset based on multiple factors."""
+
+	@abc.abstractmethod
+	def save(self, filepath):
+		"""Saves the model arch, weights and optimizer state"""
 
 	@staticmethod
 	def accuracy(predictions, labels):
@@ -49,6 +55,8 @@ class NeuralNetwork(abc.ABC):
 
 	@staticmethod
 	def sign_accuracy(labels, prediction):
+		#Note: using this as a Keras metric doesn't work
+		#Keras uses tensors and restricts operations to only what given
 		relative_zero = 0.0 #constant, depends on the dataset type and cannot be easily retrieved
 
 		correct_signs = 0.0
@@ -102,24 +110,32 @@ class NeuralNetwork(abc.ABC):
 	def scorePrediction(prediction, labels, kind, num_targets):
 		results = []
 		for target in range(num_targets):
-			score = {}
+			rmse = {}
 			sign = {}
 			custom = {}
 			R2 = {}
 
 			# calculate root mean squared error
-			score[kind] = NeuralNetwork.RMSE(labels[kind][:, target], prediction[kind][:,target])
+			rmse[kind] = NeuralNetwork.RMSE(labels[kind][:, target], prediction[kind][:,target])
 			sign[kind] = NeuralNetwork.sign_accuracy(labels[kind][:, target], prediction[kind][:,target])
 			custom[kind] = NeuralNetwork.custom_accuracy(labels[kind][:, target], prediction[kind][:,target])
 			R2[kind] = NeuralNetwork.R2(labels[kind][:, target], prediction[kind][:,target])
 
 			print("Scores for %s." % kind)
-			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (score[kind], sign[kind], custom[kind], R2[kind]))
+			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (rmse[kind], sign[kind], custom[kind], R2[kind]))
 
-			results.append({'score': score, 'sign': sign, 'custom': custom, 'R2': R2})
+			results.append({'rmse': rmse, 'sign': sign, 'custom': custom, 'R2': R2})
 
 		return results
 
 	@staticmethod
 	def plotModel(model):
 		plot_model(model, to_file='model.png')
+
+	@staticmethod
+	def saveModelKeras(model, filepath):
+		model.save(filepath)
+	
+	@staticmethod
+	def loadModelKeras(filepath):
+		return load_model(filepath)
