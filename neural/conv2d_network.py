@@ -7,6 +7,8 @@ from keras.layers import *
 from keras.optimizers import *
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
+from keras.models import Model
+import matplotlib.pyplot as plt
 
 class Conv2DNetwork(NeuralNetwork):
 	def __init__(self):
@@ -15,7 +17,7 @@ class Conv2DNetwork(NeuralNetwork):
 		self.model = None
 		self.datasetCache = None
 
-	def train(self, givenDataset, givenLabels, args = {}):
+	def train(self, givenDataset, givenLabels, args = {}, loadModel = None):
 		dataset = {}
 		labels = {}
 
@@ -37,6 +39,7 @@ class Conv2DNetwork(NeuralNetwork):
 			args['lr'] = 0.0001
 		if 'kernel' not in args:
 			args['kernel'] = 3
+		args.setdefault('activationMap', None)
 		args.setdefault('randomData', False)
 
 		#remove any zero-size LSTM/dense layers
@@ -73,37 +76,63 @@ class Conv2DNetwork(NeuralNetwork):
 		except IndexError:
 			channels = 1
 
-		self.model = Sequential()
-		self.model.add(Conv2D(32, (args['kernel'], args['kernel']), padding='same', input_shape=(height, width, channels), name='32_1'))
-		self.model.add(Activation('relu', name='ReLU_1'))
-		self.model.add(Conv2D(32, (args['kernel'], args['kernel']), name='32_2'))
-		self.model.add(Activation('relu', name='ReLU_2'))
-		self.model.add(MaxPooling2D(pool_size=(2, 2)))
-		self.model.add(Dropout(0.25, name='0.25_1'))
-		
-		self.model.add(Conv2D(int(32 * sizeModifier), (args['kernel'], args['kernel']), padding='same', name='32_3', ))#input_shape=(height, width, channels)))
-		self.model.add(Activation('relu', name='ReLU_3'))
-		self.model.add(Conv2D(int(64 * sizeModifier), (args['kernel'], args['kernel']), name='64'))
-		self.model.add(Activation('relu', name='ReLU_4'))
-		self.model.add(MaxPooling2D(pool_size=(2, 2)))
-		self.model.add(Dropout(0.25, name='0.25_2'))
+		history = {}
 
-		self.model.add(Flatten())
-		self.model.add(Dense(512, name='512'))
-		self.model.add(Activation('relu', name='ReLU_5'))
-		self.model.add(Dropout(0.5, name='0.5'))
-		self.model.add(Dense(self.num_targets, name='1'))
-		self.model.add(Activation('linear', name='Linear'))
+		if loadModel is not None:
+			self.model = self.loadModelKeras(loadModel)
+		else:
+			self.model = Sequential()
+			self.model.add(Conv2D(32, (args['kernel'], args['kernel']), padding='same', input_shape=(height, width, channels), name='c32_1'))
+			self.model.add(Activation('relu', name='ReLU_1'))
+			self.model.add(Conv2D(32, (args['kernel'], args['kernel']), name='c32_2'))
+			self.model.add(Activation('relu', name='ReLU_2'))
+			self.model.add(MaxPooling2D(pool_size=(2, 2)))
+			self.model.add(Dropout(0.25, name='0.25_1'))
+			
+			self.model.add(Conv2D(int(32 * sizeModifier), (args['kernel'], args['kernel']), padding='same', name='c32_3', ))#input_shape=(height, width, channels)))
+			self.model.add(Activation('relu', name='ReLU_3'))
+			self.model.add(Conv2D(int(64 * sizeModifier), (args['kernel'], args['kernel']), name='c64'))
+			self.model.add(Activation('relu', name='ReLU_4'))
+			self.model.add(MaxPooling2D(pool_size=(2, 2)))
+			self.model.add(Dropout(0.25, name='0.25_2'))
 
-		#opt = Adam(args['lr'])
+			self.model.add(Flatten())
+			self.model.add(Dense(512, name='512'))
+			self.model.add(Activation('relu', name='ReLU_5'))
+			self.model.add(Dropout(0.5, name='0.5'))
+			self.model.add(Dense(self.num_targets, name='1'))
+			self.model.add(Activation('linear', name='Linear'))
 
-		opt = rmsprop(lr=args['lr'], decay=1e-6)
+			#opt = Adam(args['lr'])
 
-		self.model.compile(loss='mean_squared_error', optimizer=opt)
+			opt = rmsprop(lr=args['lr'], decay=1e-6)
 
-		self.plotModel(self.model)
+			self.model.compile(loss='mean_squared_error', optimizer=opt)
 
-		self.model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=False)
+			self.plotModel(self.model)
+
+			for i in range(args['epoch']):
+				epochHist = self.model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=1, batch_size=args['batch'], verbose=1, shuffle=False)
+
+				prediction = {}
+				prediction['test'] = self.model.predict(dataset['test'], batch_size=args['batch'])
+
+				evalHist = self.scorePrediction(prediction, labels, 'test', self.num_targets)[0]
+
+				for key in evalHist: #temporary workaround
+					evalHist[key] = evalHist[key]['test']
+
+				print(evalHist)
+
+				for scoresDict in [epochHist.history, evalHist]:
+					for key in scoresDict:
+						if key not in history:
+							history[key] = []
+						if type(scoresDict[key]) == list:
+							history[key].extend(scoresDict[key])
+						else:
+							history[key].append(scoresDict[key])
+
 
 		# make predictions
 		self.prediction = {}
@@ -116,6 +145,7 @@ class Conv2DNetwork(NeuralNetwork):
 		self.scorePrediction(self.prediction, labels, 'train', self.num_targets)
 		self.scorePrediction(self.prediction, labels, 'test', self.num_targets)
 
+		return history
 			
 
 	def predict(self, setType):
@@ -125,3 +155,6 @@ class Conv2DNetwork(NeuralNetwork):
 
 	def evaluate(self, setType):
 		return self.scorePrediction(self.predict(setType))
+
+	def save(self, filepath):
+		self.saveModelKeras(self.model, filepath)
