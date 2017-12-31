@@ -15,7 +15,7 @@ from PIL import Image
 import database_tools as db
 
 
-def plot(values, datesm, title=''):
+def plot(values, dates, title=''):
 		plt.plot(dates, values)
 		plt.xlabel = 'Timeline'
 		plt.title(title)
