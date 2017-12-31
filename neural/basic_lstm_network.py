@@ -11,15 +11,16 @@ from sklearn.metrics import mean_squared_error
 class BasicLSTMNetwork(NeuralNetwork):
 	def __init__(self):
 		self.name="LSTM"
+		self.model = None
 
-	def train(self, givenDataset, givenLabels, args = {}):
+	def train(self, givenDataset, givenLabels, args = {}, loadModel = None):
 		dataset = {}
 		labels = {}
 
 		if 'epoch' not in args:
 			args['epoch'] = 5
 		if 'LSTM' not in args:
-			args['LSTM'] = [128, 256, 512]
+			args['LSTM'] = [128, 256]
 		elif type(args['LSTM']) != list:
 			args['LSTM'] = [args['LSTM']]
 		if 'dense' not in args:
@@ -59,43 +60,66 @@ class BasicLSTMNetwork(NeuralNetwork):
 
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
 
-		model = Sequential()
+		history = {}
 
-		for i, layer in enumerate(args['LSTM']):
-			ret_seq=(i< (len(args['LSTM'])-1))
-			name = str(layer)+ '_' + str(i+1) + ('_ret_seq' if ret_seq else '')
-			if i==0:
-				model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features), name=name ) )
-				model.add(Dropout(0.1, name='0.1'))
-			else:
-				model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], name=name) )
-			#model.add(Activation('relu'))
-			print("Adding LSTM Layer of size %d." % layer)
-
-		for dense in args['dense']:
-			model.add(Dense(dense))
-			#model.add(Activation('relu'))
-
-		model.add(Dense(self.num_targets, name=str(self.num_targets)))
-		model.add(Activation('linear', name='linear'))
-
-		#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
-
-		opt = Adam(args['lr'])
-
-		model.compile(loss='mean_squared_error', optimizer=opt)
-
-		self.plotModel(model)
-
-		val = (dataset['test'], labels['test'])
-
-		if not args['stateful']:
-			model.fit(dataset['train'], labels['train'], epochs=args['epoch'], batch_size=args['batch'], validation_data=val, verbose=1, shuffle=False)
+		if loadModel is not None:
+			model = self.loadModelKeras(loadModel)
 		else:
+			model = Sequential()
+
+			for i, layer in enumerate(args['LSTM']):
+				ret_seq=(i< (len(args['LSTM'])-1))
+				name = str(layer)+ '_' + str(i+1) + ('_ret_seq' if ret_seq else '')
+				if i==0:
+					model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features), name=name ) )
+					model.add(Dropout(0.1, name='0.1'))
+				else:
+					model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], name=name) )
+				#model.add(Activation('relu'))
+				print("Adding LSTM Layer of size %d." % layer)
+
+			for dense in args['dense']:
+				model.add(Dense(dense))
+				#model.add(Activation('relu'))
+
+			model.add(Dense(self.num_targets, name=str(self.num_targets)))
+			model.add(Activation('linear', name='linear'))
+
+			#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
+
+			opt = Adam(args['lr'])
+
+			model.compile(loss='mean_squared_error', optimizer=opt)
+
+			self.plotModel(model)
+
+			val = (dataset['test'], labels['test'])
+
 			for i in range(args['epoch']):
-				model.predict(dataset['warm'], batch_size=args['batch']) #predict so that fitting starts with a state
-				model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], validation_data=val, verbose=1, shuffle=False)
-				model.reset_states()
+				if not args['stateful']:
+					epochHist = model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], validation_data=val, verbose=1, shuffle=False)
+				else:
+					model.predict(dataset['warm'], batch_size=args['batch']) #predict so that fitting starts with a state
+					epochHist = model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], validation_data=val, verbose=1, shuffle=False)
+					model.reset_states()
+				prediction = {}
+				prediction['test'] = model.predict(dataset['test'], batch_size=args['batch'])
+
+				evalHist = self.scorePrediction(prediction, labels, 'test', self.num_targets)[0]
+
+				for key in evalHist: #temporary workaround
+					evalHist[key] = evalHist[key]['test']
+
+				print(evalHist)
+
+				for scoresDict in [epochHist.history, evalHist]:
+					for key in scoresDict:
+						if key not in history:
+							history[key] = []
+						if type(scoresDict[key]) == list:
+							history[key].extend(scoresDict[key])
+						else:
+							history[key].append(scoresDict[key])
 
 		# make predictions
 		self.prediction = {}
@@ -112,7 +136,15 @@ class BasicLSTMNetwork(NeuralNetwork):
 		self.scorePrediction(self.prediction, labels, 'train', self.num_targets)
 		self.scorePrediction(self.prediction, labels, 'test', self.num_targets)
 
-			
+		self.model = model
+
+		return history
 
 	def predict(self, setType):
 		return self.prediction[setType]
+
+	def evaluate(self, setType):
+		pass #TODO implement
+
+	def save(self, filepath):
+		self.saveModelKeras(self.model, filepath)
