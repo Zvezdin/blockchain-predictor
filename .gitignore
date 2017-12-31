@@ -10,6 +10,8 @@ data/
 c++/build/
 c++/test*
 debug/*
+paper/*
+temp.py
 
 .vscode/
 .node-xmlhttprequest-sync-*
