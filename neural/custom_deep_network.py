@@ -11,8 +11,9 @@ from sklearn.metrics import mean_squared_error
 class CustomDeepNetwork(NeuralNetwork):
 	def __init__(self):
 		self.name="CustomDeep"
+		self.model = None
 
-	def train(self, givenDataset, givenLabels, args = {}):
+	def train(self, givenDataset, givenLabels, args = {}, loadModel = None):
 		dataset = {}
 		labels = {}
 
@@ -43,29 +44,52 @@ class CustomDeepNetwork(NeuralNetwork):
 			dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1] * givenDataset[kind].shape[2]))
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
 
-		model = Sequential()
+		history = {}
 
-		for i, layer in enumerate(args['hidden']):
-			if i==0:
-				model.add(Dense(layer, batch_input_shape=(args['batch'], time_steps * features), name=str(layer) ) )
-				model.add(Dropout(0.1, name='0.1'))
-			else:
-				model.add(Dense(layer, name=str(layer)) )
-			model.add(Activation('relu', name='relu_'+str(i+1)))
-			print("Adding Dense Layer of size %d." % layer)
+		if loadModel is not None:
+			model = self.loadModelKeras(loadModel)
+		else:
+			model = Sequential()
 
-		model.add(Dense(self.num_targets, name='1'))
-		model.add(Activation('linear', name='linear'))
+			for i, layer in enumerate(args['hidden']):
+				if i==0:
+					model.add(Dense(layer, batch_input_shape=(args['batch'], time_steps * features), name=str(layer) ) )
+					model.add(Dropout(0.1, name='0.1'))
+				else:
+					model.add(Dense(layer, name=str(layer)) )
+				model.add(Activation('relu', name='relu_'+str(i+1)))
+				print("Adding Dense Layer of size %d." % layer)
 
-		#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
+			model.add(Dense(self.num_targets, name='1'))
+			model.add(Activation('linear', name='linear'))
 
-		opt = Adam(args['lr'])
+			#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
 
-		model.compile(loss='mean_squared_error', optimizer=opt)
+			opt = Adam(args['lr'])
 
-		self.plotModel(model)
+			model.compile(loss='mean_squared_error', optimizer=opt)
 
-		model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=args['epoch'], batch_size=args['batch'], verbose=1, shuffle=True)
+			self.plotModel(model)
+
+			for i in range(args['epoch']):
+				epochHist = model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=1, batch_size=args['batch'], verbose=1, shuffle=False)
+
+				prediction = {}
+				prediction['test'] = model.predict(dataset['test'], batch_size=args['batch'])
+
+				evalHist = self.scorePrediction(prediction, labels, 'test', self.num_targets)[0]
+
+				for key in evalHist: #temporary workaround
+					evalHist[key] = evalHist[key]['test']
+
+				for scoresDict in [epochHist.history, evalHist]:
+					for key in scoresDict:
+						if key not in history:
+							history[key] = []
+						if type(scoresDict[key]) == list:
+							history[key].extend(scoresDict[key])
+						else:
+							history[key].append(scoresDict[key])
 
 		# make predictions
 		self.prediction = {}
@@ -82,7 +106,15 @@ class CustomDeepNetwork(NeuralNetwork):
 		self.scorePrediction(self.prediction, labels, 'train', self.num_targets)
 		self.scorePrediction(self.prediction, labels, 'test', self.num_targets)
 
-			
+		self.model = model
+
+		return history
 
 	def predict(self, setType):
 		return self.prediction[setType]
+
+	def evaluate(self, setType):
+		pass #TODO implement
+
+	def save(self, filepath):
+		self.saveModelKeras(self.model, filepath)
