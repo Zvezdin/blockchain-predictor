@@ -19,7 +19,8 @@ from conv2d_network import Conv2DNetwork
 
 import database_tools as db
 
-globalModels = [CustomDeepNetwork(), BasicLSTMNetwork(), Conv2DNetwork()]
+#TODO: Temporary removed [CustomDeepNetwork(), BasicLSTMNetwork(), Conv2DNetwork()]
+globalModels = [Conv2DNetwork()]
 
 def loadDataset(filename):
 	with open(filename, 'rb') as f:
@@ -72,7 +73,11 @@ def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, 
 		print("Starting to train and evaluate the following networks: ", [net.name for net in selectedModels])
 
 	for model in selectedModels:
-		history = model.train(dataset, labels, modelArgs, loadModel=loadModel)
+		if loadModel:
+			model.load(loadModel)
+		history = model.train(dataset, labels, modelArgs)
+
+		print(history)
 
 		if saveModel is not None:
 			model.save(saveModel+'.h5')
@@ -85,28 +90,29 @@ def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, 
 	if not quiet:
 		print("Running prediction on test dataset.")
 
-	for setType in ['train', 'test']: # used to contain 'train' as well, for debug
+	for setType in ['train', 'test']:
 		predictions = []
 
 		for model in selectedModels:
-			#TODO don't rely on the model's memory of the dataset.
-			res = model.predict(setType)
+			print("Scores for model %s, dataset %s:" % (model.name, setType))
+			print(model.evaluate(dataset[setType], labels[setType]))
+
+			res = model.predict(dataset[setType])
 
 			p = dates[setType].argsort()
-
 			predictions.append({'model': model.name, 'prediction': res[p], 'actual': labels[setType][p], 'dates': dates[setType][p]})
 
-		if not quiet:
-			print("Starting simulated trading to evaluate results")
+		#if not quiet:
+		#	print("Starting simulated trading to evaluate results")
 
 		#for pred in predictions:
 		#	res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
 		#	if not quiet:
 		#		print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
 
-		print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 		for pred in predictions:
 			drawAccuracyGraph(pred['model'], pred['dates'], pred['prediction'], pred['actual'], quiet, setType)
+	print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 
 def simulateTrading(prediction, actual, startBalance):
 	balance = startBalance #start with 100 of the stable currency
@@ -139,7 +145,6 @@ def simulateTrading(prediction, actual, startBalance):
 	return (balance, timesTraded)
 
 def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'test'):
-	plt.clf() #clear figure
 	plt.figure(figsize=(16*2, 9*2))
 
 	nPlots = actual.shape[1]
@@ -181,7 +186,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	givenModels = [x.lower() for x in args.models.split(',')] if args.models else None
 
 	modelArgs = {}
-	pairs = args.args.split(',')
+	pairs = args.args.split(',') if args.args else []
 	for pair in pairs:
 		key, value = pair.split('=')
 
