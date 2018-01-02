@@ -17,9 +17,12 @@ class Conv2DNetwork(NeuralNetwork):
 		self.model = None
 
 	def reformat(self, dataset, labels):
-		newLabels = labels.astype(np.float32) #shape of labels is (samples, targets)
-		if self.invertLabels:
-			newLabels = 1-newLabels
+		newLabels = None
+
+		if labels is not None:
+			newLabels = labels.astype(np.float32) #shape of labels is (samples, targets)
+			if self.invertLabels:
+				newLabels = 1-newLabels
 
 		if len(dataset.shape) == 3:
 			#reshape from N,time_steps,features to N,time_steps,features,1
@@ -122,49 +125,27 @@ class Conv2DNetwork(NeuralNetwork):
 		for i in range(args['epoch']):
 			epochHist = self.model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=1, batch_size=args['batch'], verbose=1, shuffle=False)
 
-			prediction = {}
-			prediction['test'] = self.model.predict(dataset['test'], batch_size=args['batch'])
+			prediction = self.model.predict(dataset['test'], batch_size=args['batch'])
+			evalHist = self.scorePrediction(prediction, labels['test'])[0]
 
-			evalHist = self.scorePrediction(prediction, labels, 'test', self.num_targets)[0]
-
-			for key in evalHist: #temporary workaround
-				evalHist[key] = evalHist[key]['test']
-
-			print(evalHist)
-
-			for scoresDict in [epochHist.history, evalHist]:
-				for key in scoresDict:
-					if key not in history:
-						history[key] = []
-					if type(scoresDict[key]) == list:
-						history[key].extend(scoresDict[key])
-					else:
-						history[key].append(scoresDict[key])
+			self.mergeHistories(history, epochHist.history)
+			self.mergeHistories(history, evalHist)
 
 		if args['activationMap'] is not None:
 			activationMap(args['activationMap'])
-
-		# make predictions
-		self.prediction = {}
-
-		self.prediction['train'] = self.model.predict(dataset['train'], batch_size=args['batch'])
-		self.prediction['test'] = self.model.predict(dataset['test'], batch_size=args['batch'])
-
-		print(self.prediction['test'].shape)
-
-		self.scorePrediction(self.prediction, labels, 'train', self.num_targets)
-		self.scorePrediction(self.prediction, labels, 'test', self.num_targets)
 
 		return history
 			
 
 	def predict(self, dataset):
+		dataset, _ = self.reformat(dataset, None)
 		if self.invertLabels:
 			return 1-self.model.predict(dataset)
 		return self.model.predict(dataset)
 
-	def evaluate(self, dataset):
-		return self.scorePrediction(self.predict(dataset))
+	def evaluate(self, dataset, labels):
+		_, labels = self.reformat(dataset, labels) #don't reformat the dataset, predict() will reformat it
+		return self.scorePrediction(self.predict(dataset), labels)
 
 	def activationMap(layer_name):
 		print("Creating an activation map for layer %s." % layer_name)
