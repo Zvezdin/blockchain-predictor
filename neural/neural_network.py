@@ -28,13 +28,25 @@ class NeuralNetwork(abc.ABC):
 	def save(self, filepath):
 		"""Saves the model arch, weights and optimizer state"""
 
+	@abc.abstractmethod
+	def load(self, filepath):
+		"""Loads the model arch, weights and optimizer state"""
+
+	@abc.abstractmethod
+	def build(self, args = {}):
+		"""Builds the model"""
+
+	@abc.abstractmethod
+	def reformat(self, dataset, labels):
+		"""Reformats the dataset and labels based on network specification"""
+
 	@staticmethod
 	def accuracy(predictions, labels):
 		return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
 			/ predictions.shape[0])
 
 	@staticmethod
-	def reformat(dataset, labels, image_width, image_height, num_labels):
+	def labelsReformat(dataset, labels, image_width, image_height, num_labels):
 		dataset = dataset.reshape((-1, image_width * image_height)).astype(np.float32)
 		# Map 1 to [0.0, 1.0, 0.0 ...], 2 to [0.0, 0.0, 1.0 ...]
 
