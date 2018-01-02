@@ -21,7 +21,7 @@ class NeuralNetwork(abc.ABC):
 		"""Runs the deep network and returns predictions on this dataset"""
 
 	@abc.abstractmethod
-	def evaluate(self, dataset):
+	def evaluate(self, dataset, labels):
 		"""Evaluates the performance on a certain dataset based on multiple factors."""
 
 	@abc.abstractmethod
@@ -119,26 +119,28 @@ class NeuralNetwork(abc.ABC):
 		return 1 - sumOfErrors / nullModel
 
 	@staticmethod
-	def scorePrediction(prediction, labels, kind, num_targets):
+	def scorePrediction(prediction, labels):
 		results = []
-		for target in range(num_targets):
-			rmse = {}
-			sign = {}
-			custom = {}
-			R2 = {}
-
+		for target in range(labels.shape[1]):
 			# calculate root mean squared error
-			rmse[kind] = NeuralNetwork.RMSE(labels[kind][:, target], prediction[kind][:,target])
-			sign[kind] = NeuralNetwork.sign_accuracy(labels[kind][:, target], prediction[kind][:,target])
-			custom[kind] = NeuralNetwork.custom_accuracy(labels[kind][:, target], prediction[kind][:,target])
-			R2[kind] = NeuralNetwork.R2(labels[kind][:, target], prediction[kind][:,target])
-
-			print("Scores for %s." % kind)
-			print('%f RMSE\t%f sign\t%f custom\t%f R2' % (rmse[kind], sign[kind], custom[kind], R2[kind]))
+			rmse = NeuralNetwork.RMSE(labels[:, target], prediction[:,target])
+			sign = NeuralNetwork.sign_accuracy(labels[:, target], prediction[:,target])
+			custom = NeuralNetwork.custom_accuracy(labels[:, target], prediction[:,target])
+			R2 = NeuralNetwork.R2(labels[:, target], prediction[:,target])
 
 			results.append({'rmse': rmse, 'sign': sign, 'custom': custom, 'R2': R2})
 
 		return results
+
+	@staticmethod
+	def mergeHistories(history, newPart):
+		for key in newPart:
+			if key not in history:
+				history[key] = []
+			if type(newPart[key]) == list:
+				history[key].extend(newPart[key])
+			else:
+				history[key].append(newPart[key])
 
 	@staticmethod
 	def plotModel(model):
