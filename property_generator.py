@@ -77,7 +77,7 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 
 	for prop in properties:
 
-		if prop.provides == None:
+		if prop.provides is None:
 			values[prop.name]= []
 		else:
 			for name in prop.provides:
@@ -93,7 +93,7 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 			val = prop.processTick(data)
 			if debug: print("Got value", val, "for property", prop.name)
 
-			if prop.provides != None:
+			if prop.provides is not None:
 				if len(prop.provides) != len(val):
 					raise ValueError('The length of the returned child properties does not match the list of child ones by property %s !' % prop.name)
 				for i, provided in enumerate(prop.provides):
@@ -107,53 +107,31 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 	except KeyboardInterrupt:
 		print("Got interrupted, saving the current progress...")
 
-	#print("DEBUG:")
-	#for prop in globalProperties:
-	#	if prop.name == 'accountDistribution':
-	#		for adr in ['0xb794f5ea0ba39494ce839613fffba74279579268', '0x35da6AbcB08F2b6164fE380BB6c47BD8F2304d55']:
-	#			adr = adr.lower() #fix capital hex error
-	#			print("Balance of %s is %d" % (adr, prop.accounts[adr]))
-	#		print("Max balance is %d." % max(prop.accounts.values()))
-
 	#hold the property names that don't provide children in a list
-	propNames = [prop.name for prop in properties if prop.provides == None]
+	propNames = [prop.name for prop in properties if prop.provides is None]
 
 	#take the children those who provide them
 	for prop in properties:
-		if prop.provides != None:
+		if prop.provides is not None:
 			propNames.extend(prop.provides)
 
 
+	for prop in list(values.keys()):
+		modifiedProperty(values, prop, prop+"_sma", smaValues)
+		modifiedProperty(values, prop, prop+"_ema", emaValues)
+		modifiedProperty(values, prop, prop+"_10max", futureMaxValues)
+		modifiedProperty(values, prop, prop+"_10min", futureMinValues)
+
+	if relative: #turn everything relative
+		for prop in list(values.keys()):
+			modifiedProperty(values, prop, prop+"_rel", relativeValues)
+
 	#save the raw property values
-	for prop in propNames:
+	for prop in values.keys():
 		try:
 			saveProperty(prop, values[prop])
 		except ValueError as e:
 			print("Failed saving property!", e, traceback.format_exc())
-
-	for prop in properties:
-		if relative and not prop.isRelative: #turn that property into relative values
-			print("Turning property %s into relative values." % prop.name)
-
-			names = [prop.name]
-
-			if prop.provides != None:
-				names = prop.provides
-
-			for name in names:
-				values[name+"_rel"] = values.pop(name) #rename the main property key
-				for i in range(len(values[name+'_rel'])-1, -1, -1): #reverse index iteration
-					if i > 0:
-						values[name+'_rel'][i][name] = values[name+'_rel'][i][name] - values[name+'_rel'][i-1][name]
-
-						values[name+'_rel'][i][name+'_rel'] = values[name+'_rel'][i].pop(name) # rename the value key
-
-				values[name+'_rel'].pop(0) #remove the first value as we can't relative that
-
-				try:
-					saveProperty(name+'_rel', values[name+'_rel'])
-				except:
-					print("Failed saving property!", sys.exc_info()[0])
 
 def saveProperty(name, val, quiet = False):
 	val2 = []
@@ -231,6 +209,99 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 
 			callback(tickData, currentEnd)
 
+def modifiedProperty(valuesDict, name, newName, transformFunction):
+	propVals = []
+
+	valuesDict[newName] = []
+
+	for i, val in enumerate(valuesDict[name]):
+		propVals.append(val[name])
+
+	propVals = transformFunction(propVals)
+
+	for i, val in enumerate(propVals):
+		if val is not None: #we can see none values in the start of the series as they cannot be converted to what needed.
+			valuesDict[newName].append({'date': valuesDict[name][i]['date'], newName: val})
+
+def relativeValues(values):
+	newValues = []
+	for i in range(len(values)-1, -1, -1):
+		if i > 0:
+			newValues.append(values[i] - values[i-1])
+		else:
+			newValues.append(None)
+	newValues.reverse()
+
+	return newValues
+
+def smaValues(values, periods=10):
+	newValues = []
+
+	for i, val in enumerate(values):
+		if i < periods -1:
+			newValues.append(None)
+		else:
+			newValues.append(sum(values[i-(periods-1): i+1]) / float(periods)) #the avg of last 'periods' periods
+
+	return newValues
+
+def emaValues(values, periods=10):
+	newValues = []
+
+	multiplier = 2 / float(periods + 1)
+
+	smaVals = smaValues(values, periods=periods)
+
+	initialSMA = False
+
+	for i, sma in enumerate(smaVals):
+		if sma is None:
+			newValues.append(None)
+			continue
+		
+		if(not initialSMA):
+			ema = sma #the first value is the first available SMA
+			initialSMA = True
+		else:
+			ema = (values[i] - newValues[i-1]) * multiplier + newValues[i-1]
+		newValues.append(ema)
+
+	return newValues
+
+def macdValues(values, firstEmaPeriods = 12, secondEmaPeriods = 26):
+	newValues = []
+
+	firstEma = emaValues(values, firstEmaPeriods)
+	secondEma = emaValues(values, secondEmaPeriods)
+
+	for i, val in enumerate(values):
+		if firstEma[i] is None or secondEma[i] is None:
+			newValues.append(None)
+		else:
+			newValues.append(firstEma[i] - secondEma[i])
+
+def futureMaxValues(values, periods=10):
+	return futureMaxMinValues(values, periods=periods, minValues=False)
+
+def futureMinValues(values, periods=10):
+	return futureMaxMinValues(values, periods=periods, minValues=True)
+
+
+def futureMaxMinValues(values, periods=10, minValues=False):
+	newValues = []
+
+	for i, val in enumerate(values):
+		if(i+(periods-1) >= len(values)):
+			newValues.append(None)
+		else:
+			subset = values[i:(i+periods)]
+			if(minValues):
+				val = min(subset)
+			else:
+				val = max(subset)
+			newValues.append(val)
+	return newValues
+
 def decodeRawData(data):
 	if 'logs' in data: #the logs in our raw data are encoded via pickle, because of Arctic limitations
 		data['logs'] = data['logs'].apply(lambda x: db.decodeObject(x))
@@ -274,7 +345,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 			properties = [prop.name for prop in globalProperties if prop.provides == None]
 
 			for prop in globalProperties:
-				if prop.provides != None:
+				if prop.provides is not None:
 					properties.extend(prop.provides)
 
 			relProps = properties.copy()
