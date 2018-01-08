@@ -21,12 +21,14 @@ def plot(values, dates, title=''):
 		plt.title(title)
 		plt.show()
 
-def plotImage(val, filename=None):
+def plotImage(val, filename=None, hbar=False):
 	if filename is not None and os.path.isfile(filename):
 		return #no need to re-render if it already exists
 	plt.clf()
+
 	plt.imshow(val, interpolation="nearest")
-	plt.colorbar()
+	plt.colorbar(orientation='horizontal' if hbar else 'vertical')
+
 	if filename is None:
 		plt.show()
 	else:
@@ -75,10 +77,12 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--frame', dest='frame', action='store_true', help='Display single frame values')
 	parser.add_argument('--trim', dest='trim', action='store_true', help='A frame can be trimmed from values on Y=0 and X=end.')
 	parser.add_argument('--log2', dest='log2', action='store_true', help='Scale all account counts by a log2.')
+	parser.add_argument('--hbar', dest='hbar', action='store_true', help='Position the colorbar horisontally.')
 	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as images in the specified director.')
 	parser.set_defaults(frame=False)
 	parser.set_defaults(trim=False)
 	parser.set_defaults(log2=False)
+	parser.set_defaults(hbar=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -153,7 +157,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					print(val)
 					print(val.shape)
 					print(date)
-					plotImage(val)
+					plotImage(val, hbar = args.hbar)
 				else:
 					frames.append(val)
 			if args.renderTimelapse is not None:
