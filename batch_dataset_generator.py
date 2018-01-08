@@ -4,7 +4,7 @@ import os.path
 import dataset_generator as gen
 
 def run(group, folder):
-	directory = folder + group + '/'
+	directory = os.path.join(folder, group)
 
 	if group == 'distributions':
 
@@ -23,11 +23,12 @@ def run(group, folder):
 			for suffix in ['']:#, '_rel']: we found that relative values don't help
 				distribution += suffix
 
-				for target in ['highPrice_rel', 'highPrice', 'uniqueAccounts', 'uniqueAccounts_rel']:
-					for model in ['stacked', 'matrix']:
+				for target in ['highPrice_rel', 'highPrice_10max_rel', 'highPrice', 'highPrice_10max', 'uniqueAccounts', 'uniqueAccounts_rel']:
+					for model in ['stacked']:#, 'matrix']:
 						for normStd in ['global']:#, 'local']:
 							for window in [1, 5, 24, 104]:
-								filename = directory + model + '-' + distribution + '-' + target + '-' + normStd + '-' + str(window)+'w' + '.pickle'
+								filename = model + '-' + distribution + '-' + target + '-' + normStd + '-' + str(window)+'w' + '.pickle'
+								filename = os.path.join(directory, filename)
 								if not os.path.exists(filename): #no need to waste writes if already written
 									print("Generating dataset %s." % filename)
 									gen.run(model, target+','+distribution, '2017-03-01', None, filename, 'full', '1:6:1', False,\
