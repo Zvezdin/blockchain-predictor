@@ -40,19 +40,11 @@ class Property(abc.ABC):
 	
 	@staticmethod
 	def maxOfColumn(df, column):
-		index = df.columns.searchsorted(column)
-
-		val = df.values
-
-		return max(val)
+		return df.max()[column]
 
 	@staticmethod
 	def minOfColumn(df, column):
-		index = df.columns.searchsorted(column)
-
-		val = df.values
-
-		return min(val)
+		return df.min()[column]
 
 	def __str__(self):
 		return "Property "+self.name
