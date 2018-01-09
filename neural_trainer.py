@@ -10,6 +10,7 @@ import pandas as pd
 from arctic.date import CLOSED_OPEN
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 sys.path.insert(0, os.path.realpath('neural'))
 from neural_network import NeuralNetwork
@@ -33,7 +34,7 @@ def randomizeDataset(dataset, labels, dates):
 	shuffled_dates = dates[permutation]
 	return shuffled_dataset, shuffled_labels, shuffled_dates
 
-def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, loadModel = None, quiet = False, shuffle = True, trim = False):
+def run(datasetFile, models, modelArgs = {}, saveModel = None, loadModel = None, quiet = False, shuffle = True, trim = False):
 
 	#load the datasets
 	rawDataset = loadDataset(datasetFile)
@@ -41,6 +42,8 @@ def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, 
 	dataset = {}
 	labels = {}
 	dates = {}
+
+	history = {}
 
 	for i, kind in enumerate(['warm', 'train', 'test']):
 		targetLen = len(rawDataset[i]['dataset'])
@@ -75,14 +78,14 @@ def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, 
 	for model in selectedModels:
 		if loadModel:
 			model.load(loadModel)
-		history = model.train(dataset, labels, modelArgs)
+		history[model.name] = model.train(dataset, labels, modelArgs)
 
-		print(history)
+		print(history[model.name])
 
 		if saveModel is not None:
 			model.save(saveModel+'.h5')
 			with open(saveModel+'.pickle', 'wb') as f:
-				pickle.dump(history, f, pickle.HIGHEST_PROTOCOL)
+				pickle.dump(history[model.name], f, pickle.HIGHEST_PROTOCOL)
 
 	if not quiet:
 		print("Trained the networks.")
@@ -90,28 +93,27 @@ def run(datasetFile, models, modelArgs = {}, saveImg = False, saveModel = None, 
 	if not quiet:
 		print("Running prediction on test dataset.")
 
-	for setType in ['train', 'test']:
+	for model in selectedModels:
 		predictions = []
+		actuals = []
+		datesList = []
 
-		for model in selectedModels:
+		for setType in ['train', 'test']:
 			print("Scores for model %s, dataset %s:" % (model.name, setType))
 			print(model.evaluate(dataset[setType], labels[setType]))
 
 			res = model.predict(dataset[setType])
 
 			p = dates[setType].argsort()
-			predictions.append({'model': model.name, 'prediction': res[p], 'actual': labels[setType][p], 'dates': dates[setType][p]})
+			predictions.append(res[p])
+			actuals.append(labels[setType][p])
+			datesList.append(dates[setType][p])
 
-		#if not quiet:
-		#	print("Starting simulated trading to evaluate results")
+		filename = None
 
-		#for pred in predictions:
-		#	res, trades = simulateTrading(pred['prediction'], pred['actual'], 100.0)
-		#	if not quiet:
-		#		print("Got return %4f$ when starting with 100$ (%d trades) for predictions by model %s" % (res, trades, pred['model']))
-
-		for pred in predictions:
-			drawAccuracyGraph(pred['model'], pred['dates'], pred['prediction'], pred['actual'], quiet, setType)
+		if saveModel is not None:
+			filename = saveModel+".svg"
+		drawAccuracyGraph(model.name, datesList, predictions, actuals, history=history[model.name], filename=filename)
 	print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 
 def simulateTrading(prediction, actual, startBalance):
@@ -144,24 +146,53 @@ def simulateTrading(prediction, actual, startBalance):
 
 	return (balance, timesTraded)
 
-def drawAccuracyGraph(name, dates, prediction, actual, save=False, setType = 'test'):
-	plt.figure(figsize=(16*2, 9*2))
+def drawAccuracyGraph(name, dates, predictions, actuals, history=None, filename=None):
+	fig = plt.figure(figsize=(16*2, 9*2))
 
-	nPlots = actual.shape[1]
+	if type(predictions) != list:
+		predictions = [predictions]
+	if type(actuals) != list:
+		actuals = [actuals]
+	if type(dates) != list:
+		dates = [dates]
 
-	for plotN in range(nPlots):
-		plt.subplot(nPlots*100 + 10 + plotN + 1)
+	rows = 0
+	
+	for actual in actuals:
+		rows += actual.shape[1]
+	
+	if history is not None:
+		cols = len(history.keys())
+		rows += 1
+	else:
+		cols = 1
+	gs = GridSpec(rows, cols)
 
-		plt.plot(dates, actual[:, plotN], label='Target %d' % plotN, color='blue')
-		if prediction is not None:
-			plt.plot(dates, prediction[:, plotN], label='Predicted %d' % plotN, color='red')
-		plt.x = dates
-		plt.title('Target vs Predicted on %s' % name)
-		plt.legend(loc='upper left')
-	if not save:
+	currRow = 0
+
+	for prediction, actual, date in zip(predictions, actuals, dates):
+		for i in range(actual.shape[1]):
+			plt.subplot(gs[currRow, :])
+			currRow += 1
+
+			plt.plot(date, actual[:, i], label='Target %d' % i, color='blue')
+			if prediction is not None:
+				plt.plot(date, prediction[:, i], label='Predicted %d' % i, color='red')
+			plt.x = date
+			plt.legend(loc='upper left')
+	if history is not None:
+		for i, measure in enumerate(list(history.keys())):
+			plt.subplot(gs[currRow, i])
+
+			plt.plot(history[measure], label=measure)
+			plt.legend(loc='upper left')
+
+	fig.suptitle('Performance of %s' % name)
+	plt.tight_layout()
+
+	if filename is None:
 		plt.show()
 	else:
-		filename = "data/results/%s_%s.svg" % (str(dt.now()), setType)
 		plt.savefig(filename)
 		print("Saved accuracy graph at %s." % filename)
 
@@ -172,10 +203,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--args', type=str, help="A list of arguments to be passed on to the models. In the format key1=value1,key2=value2.1;value2.2")
 	parser.add_argument('--quiet', dest='quiet', action="store_true", help="Do not plot graphs, but save them as images.")
 	parser.set_defaults(quiet=False)
-	parser.add_argument('--saveImg', dest='saveImg', action="store_true", help="Plot the model test and train performance on a graph and save it as a file.")
-	parser.set_defaults(saveImg=False)
-	parser.add_argument('--saveModel', type=str, help="Location to save the model architecture, weights, training history and evaluation scores. DO NOT include file extension, just filename!")
-	parser.add_argument('--loadModel', type=str, help="Location to to load a saved model architecture, weights, training history and evaluation scores. Include the file extension!")
+	parser.add_argument('--saveModel', type=str, help="Location to save the model architecture, weights, training history, evaluation scores and prediction graphs. DO NOT include file extension, just filename!")
+	parser.add_argument('--loadModel', type=str, help="Location to to load a saved model architecture and weights. Include the file extension!")
 	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=False)
 	parser.add_argument('--trim-batch', dest='trim', action="store_true", help="Trim each dataset so that its length is divisible by the batch size.")
@@ -202,4 +231,4 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	print("Processed model arguments", modelArgs)
 
-	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveImg=args.saveImg, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim)
+	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim)
