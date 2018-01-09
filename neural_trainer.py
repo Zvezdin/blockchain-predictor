@@ -85,7 +85,13 @@ def run(datasetFile, models, modelArgs = {}, saveModel = None, loadModel = None,
 		if saveModel is not None:
 			model.save(saveModel+'.h5')
 			with open(saveModel+'.pickle', 'wb') as f:
-				pickle.dump(history[model.name], f, pickle.HIGHEST_PROTOCOL)
+				data = {}
+				data['history'] = history[model.name]
+				data['model'] = model.name
+				data['dataset'] = datasetFile
+				data['args'] = modelArgs
+
+				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
 	if not quiet:
 		print("Trained the networks.")
