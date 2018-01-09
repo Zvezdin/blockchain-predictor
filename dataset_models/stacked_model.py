@@ -8,18 +8,19 @@ debug = True
 class StackedModel(DatasetModel):
 
 	def __init__(self):
-		self.name="stacked"
-		self.requires=[]
+		self.name = "stacked"
+		self.requires = []
 
-	def generate(self, properties, args = {}):
-		if not properties: return
+	def generate(self, properties, args={}):
+		if not properties:
+			return (None, None, None)
 
 		#argument defaults
-		args.setdefault('window', 1)
+		args.setdefault('window', 24)
 		args.setdefault('normalize', True)
-		args.setdefault('normalizationLevel', 'pixel') #or 'layer', 'pixel'
-		args.setdefault('normalizationStd', 'local') #or 'global'
-		args.setdefault('target', ['highPrice_rel'])
+		args.setdefault('normalizationLevel', 'local') #'property', 'pixel', 'local'
+		args.setdefault('normalizationStd', 'local') #'local', 'global'
+		args.setdefault('target', ['highPrice_10max'])
 		args.setdefault('localNormalize', [None])
 		args.setdefault('defaultNormalization', 'basic')
 		args.setdefault('normalization', {'highPrice_rel': 'around_zero', 'balanceLastSeenDistribution_cpp_log2_rel': 'around_zero'})
@@ -53,7 +54,7 @@ class StackedModel(DatasetModel):
 
 			if type(v[0]) == np.ndarray: #matrix model doesn't support multi dim value arrays. Flatten them.
 				v = np.array([x for x in v]) #currently, v is a np array of np arrays. This is to force everything to one large ndarray
-				v = v.swapaxes(1,2) # swap the prop value count with the width.
+				v = v.swapaxes(1, 2) # swap the prop value count with the width.
 
 			if len(v.shape) == 1: #if it is a single value property. make it 3d
 				v = np.reshape(v, (v.shape[0], 1, 1))
@@ -92,7 +93,7 @@ class StackedModel(DatasetModel):
 				if currentRow + v.shape[1] > propertyValues.shape[1]: #can't fit horizontally
 					currentRow = 0
 					currentCol += 1 #break on new line. Should fit now.
-					
+
 					if debug: print("Property couldn't fit horizontally, went on a new row")
 
 				while currentCol + v.shape[2] > propertyValues.shape[2]: #it can't fit vertically, resize it
@@ -117,28 +118,29 @@ class StackedModel(DatasetModel):
 
 		if debug: print("Shape of property values is %s." % str(propertyValues.shape)) #(samples,H,W)
 
-		if args['normalize'] and args['normalizationLevel'] == 'pixel':
-			meanFrame = np.ndarray((propertyValues.shape[1], propertyValues.shape[2]))
-			stdFrame = np.ndarray(meanFrame.shape)
+		if args['normalize']:
+			if args['normalizationLevel'] == 'pixel':
+				meanFrame = np.ndarray((propertyValues.shape[1], propertyValues.shape[2]))
+				stdFrame = np.ndarray(meanFrame.shape)
 
-			for i in range(propertyValues.shape[1]):
-				for j in range(propertyValues.shape[2]):
-					meanFrame[i,j] = np.mean(propertyValues[:, i, j])
-					stdFrame[i,j] = np.std(propertyValues[:, i, j])
-			for i in range(propertyValues.shape[0]):
-				propertyValues[i, :, :] -= meanFrame
+				for i in range(propertyValues.shape[1]):
+					for j in range(propertyValues.shape[2]):
+						meanFrame[i,j] = np.mean(propertyValues[:, i, j])
+						stdFrame[i,j] = np.std(propertyValues[:, i, j])
+				for i in range(propertyValues.shape[0]):
+					propertyValues[i, :, :] -= meanFrame
 
-			if args['normalizationStd'] == 'local':
-				propertyValues = np.divide(propertyValues, stdFrame, where=stdFrame!=0)
-			elif args['normalizationStd'] == 'global':
-				propertyValues = propertyValues / np.std(propertyValues)
-			else:
-				raise ValueError("Unknown setting for normalizationStd - %s" % (args['normalizationStd']))
+				if args['normalizationStd'] == 'local':
+					propertyValues = np.divide(propertyValues, stdFrame, where=stdFrame!=0)
+				elif args['normalizationStd'] == 'global':
+					propertyValues = propertyValues / np.std(propertyValues)
+				else:
+					raise ValueError("Unknown setting for normalizationStd - %s" % (args['normalizationStd']))
 
-			print("Generating target data with mean %d" % np.mean(targetData))
+				print("Generating target data with mean %d" % np.mean(targetData))
 
-			targetData = targetData - np.mean(targetData)
-			targetData = targetData / np.std(targetData)
+				targetData = targetData - np.mean(targetData)
+				targetData = targetData / np.std(targetData)
 
 		print(targetData, targetData.shape)
 
@@ -146,25 +148,30 @@ class StackedModel(DatasetModel):
 
 		vals = propertyValues
 
-		frames = np.ndarray([vals.shape[0]-window_size, window_size, vals.shape[1], vals.shape[2]], dtype=np.float64) #shape is N, width, height, window_size
+		frames = np.ndarray([vals.shape[0]-window_size, window_size, vals.shape[1], vals.shape[2]], dtype=np.float64) #shape is N, window_size, width, height
 
 		nextPrices = np.ndarray((frames.shape[0], targetData.shape[1])) #len of samples with targets, num of targets
 
 		dates = []
-		
+
 		#sliding window over the values. Step is 1.
 		for i in range(len(vals)):
 			#if we've reached the end
 			if i + window_size >= vals.shape[0]: break
-			
-			#create a frame using sliding window 
+
+			#create a frame using sliding window
 			frame = vals[i:i+window_size]
 
-			frames[i] = frame
 
 			for targetI in range(targetData.shape[1]):
 				nextPrices[i, targetI] = targetData[i+window_size][targetI] #get the price that should be predicted for this frame
 
+			if args['normalizationLevel'] == 'local':
+				frame, nextPrices[i] = self.local_normalization(frame, targetData[i], nextPrices[i])
+				print("After division:", max(frame))
+				print("%f max, %f std and %f var" % (frame.max(), frame.std(), frame.var()))
+
+			frames[i] = frame
 			dates.append(allDates.iloc[i+window_size-1])
 
 		print("Head frames:")
