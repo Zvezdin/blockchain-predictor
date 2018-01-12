@@ -17,7 +17,7 @@ def run(group, folder):
 		distributions.extend(distributions1)
 		#distributions.extend(distributions2)
 		distributions.append(str.join(',', distributions1)) #append all other distributions, concatenated into a string
-		distributions.append(str.join(',', distributions2))
+		#distributions.append(str.join(',', distributions2)) these distributions are too memory-heavy
 
 		for i, distribution in enumerate(distributions):
 			for suffix in ['']:#, '_rel']: we found that relative values don't help
@@ -25,15 +25,18 @@ def run(group, folder):
 
 				for target in ['highPrice_rel', 'highPrice_10max_rel', 'highPrice', 'highPrice_10max', 'uniqueAccounts', 'uniqueAccounts_rel']:
 					for model in ['stacked']:#, 'matrix']:
-						for normStd in ['global']:#, 'local']:
-							for window in [1, 5, 24, 104]:
-								filename = model + '-' + distribution + '-' + target + '-' + normStd + '-' + str(window)+'w' + '.pickle'
+						for normalizationLevel in ['property', 'pixel', 'local']:
+							for window in [8, 24, 104]:
+								if 'distribution' in distribution.lower() and model == 'matrix' and window > 24:
+									continue #bad combination
+
+								filename = model + '-' + distribution + '-' + target + '-' + normalizationLevel + '-' + str(window)+'w' + '.pickle'
 								filename = os.path.join(directory, filename)
 								if not os.path.exists(filename): #no need to waste writes if already written
 									print("Generating dataset %s." % filename)
 									gen.run(model, target+','+distribution, '2017-03-01', None, filename, 'full', '1:6:1', False,\
 									{'window': window, 'target': [target], 'normalization': {}, 'defaultNormalization': 'auto', 'blacklistTarget': True, 'width': widths[i],\
-									'normalizationLevel': 'pixel', 'normalizationStd': normStd},\
+									'normalizationLevel': normalizationLevel, 'normalizationStd': 'global'},\
 									{distribution: {'scale': 'log2', 'slices': slices.get(i, [':', '1:'])}}) #last line will break if there is more than one distribution
 	elif group == 'experiments':
 		args = []
