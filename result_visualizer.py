@@ -4,6 +4,7 @@ import dateutil.parser
 import os
 import os.path
 import time
+import functools
 
 import matplotlib as mpl
 #mpl.use('Agg')
@@ -31,13 +32,10 @@ def plotImage(val, filename=None):
 		print("Saving file %s." % filename)
 		plt.savefig(filename)
 
-def drawAccuracyGraph(histories, titles=None, filename=None, maxCols=3):
+def drawAccuracyGraph(histories, filename=None, maxCols=3):
 	fig = plt.figure(figsize=(16*2, 9*2))
 
-	if type(histories) != list:
-		histories = [histories]
-
-	cols = len(histories[0].keys())
+	cols = len(histories.keys())
 	rows = 1
 
 	if cols > maxCols:
@@ -51,7 +49,7 @@ def drawAccuracyGraph(histories, titles=None, filename=None, maxCols=3):
 	currCol = 0
 	currRow = 0
 
-	for i, measure in enumerate(list(histories[0].keys())):
+	for measure in list(histories.keys()):
 		plt.subplot(gs[currRow, currCol])
 
 		currCol += 1
@@ -59,9 +57,9 @@ def drawAccuracyGraph(histories, titles=None, filename=None, maxCols=3):
 			currCol = 0
 			currRow += 1
 
-		for i, history in enumerate(histories):
-			plt.plot(history[measure], label=(titles[i] if titles is not None else None))
-			plt.title(measure)
+		for run in histories[measure]:
+			plt.plot(run['data'], label=(run['file']))
+		plt.title(measure)
 		plt.legend()
 	plt.tight_layout()
 
@@ -71,30 +69,73 @@ def drawAccuracyGraph(histories, titles=None, filename=None, maxCols=3):
 		plt.savefig(filename)
 		print("Saved graph at %s." % filename)
 
-if __name__ == "__main__": #if this is the main file, parse the command args
+#format of results is a list of dicts with key 'file' and 'score', being a list of scores
+def sortResults(results, ascending=True, index=-1, func=None):
+	def compare(x, y):
+		if func is None:
+			res = x['data'][index] - y['data'][index]
+		else:
+			res = func(x['data']) - func(y['data'])
+		if not ascending:
+			res = -res
+		return res
+
+	return sorted(results, key=functools.cmp_to_key(compare)) #convert to python's current format
+
+
+def init():
 	np.set_printoptions(precision=3, linewidth=180)
 
 	parser = argparse.ArgumentParser(description="Tool that can read historical data from the db or from a file and visualize it as a graph.")
 	parser.add_argument('data', type=str, nargs='*', help='A pickled file or file list, output from training.')
-	parser.add_argument('--key', type=str, default=None, help='Display a specific score')
+	parser.add_argument('--key', type=str, default=None, help='Display a specific score.')
+	parser.add_argument('--best', type=int, default=None, help='Only display the best N results.')
 	args, _ = parser.parse_known_args()
 
 	files = args.data
 
 	print(files)
 
-	data = []
+	histories = []
+
+	data = {}
+
+	titles = files.copy()
 
 	for f in files:
 		with open(f, 'rb') as fi:
-			data.append(pickle.load(fi)['history'])
+			hist = pickle.load(fi)['history']
+			histories.append(hist)
 
-	print(len(data))
-	
-	drawAccuracyGraph(data, titles=files)
-	
-	print(data[0].keys())
+	for i, hist in enumerate(histories):
+		if args.key is not None:
+			hist = {args.key: hist[args.key]}
+		
+		for key in hist:
+			if key not in data:
+				data[key] = []
+			data[key].append({'file': files[i], 'data': hist[key]})
+
+	for key in data:
+		if key == 'val_loss' or key == 'loss' or key == 'rmse' or key == 'custom':
+			data[key] = sortResults(data[key], ascending=True)
+		elif key == 'R2' or key == 'sign':
+			data[key] = sortResults(data[key], ascending=False)
+		else:
+			raise ValueError("Unexpected and unknown metric '%s'." % key)
+		print("Best for %s: are as follows" % (key))
+		for i in range(5):
+			print("#%d %s is %f at %s" % (i+1, key, data[key][i]['data'][-1], data[key][i]['file']))
+
+		if args.best is not None:
+			data[key] = data[key][:args.best]
+
+
+	drawAccuracyGraph(data)
 
 	#plt.title('Comparison of training progress')
 	#plt.legend(loc='upper left')
 	#plt.show()
+
+if __name__ == "__main__": #if this is the main file, parse the command args
+	init()
