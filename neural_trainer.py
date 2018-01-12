@@ -6,8 +6,6 @@ import dateutil.parser
 import argparse
 import pickle
 
-import pandas as pd
-from arctic.date import CLOSED_OPEN
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -18,10 +16,12 @@ from custom_deep_network import CustomDeepNetwork
 from basic_lstm_network import BasicLSTMNetwork
 from conv2d_network import Conv2DNetwork
 
-import database_tools as db
-
 #TODO: Temporary removed [CustomDeepNetwork(), BasicLSTMNetwork(), Conv2DNetwork()]
 globalModels = [Conv2DNetwork()]
+
+modelExtension = '.h5'
+historyExtension = '.pickle'
+graphExtension = '.svg'
 
 def loadDataset(filename):
 	with open(filename, 'rb') as f:
@@ -34,7 +34,7 @@ def randomizeDataset(dataset, labels, dates):
 	shuffled_dates = dates[permutation]
 	return shuffled_dataset, shuffled_labels, shuffled_dates
 
-def run(datasetFile, models, modelArgs = {}, saveModel = None, loadModel = None, quiet = False, shuffle = True, trim = False):
+def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet=False, shuffle=True, trim=False, noReplace=False):
 
 	#load the datasets
 	rawDataset = loadDataset(datasetFile)
@@ -83,8 +83,8 @@ def run(datasetFile, models, modelArgs = {}, saveModel = None, loadModel = None,
 		print(history[model.name])
 
 		if saveModel is not None:
-			model.save(saveModel+'.h5')
-			with open(saveModel+'.pickle', 'wb') as f:
+			model.save(saveModel+modelExtension)
+			with open(saveModel+historyExtension, 'wb') as f:
 				data = {}
 				data['history'] = history[model.name]
 				data['model'] = model.name
@@ -118,7 +118,7 @@ def run(datasetFile, models, modelArgs = {}, saveModel = None, loadModel = None,
 		filename = None
 
 		if saveModel is not None:
-			filename = saveModel+".svg"
+			filename = saveModel+graphExtension
 		drawAccuracyGraph(model.name, datesList, predictions, actuals, history=history[model.name], filename=filename)
 	print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 
@@ -202,7 +202,7 @@ def drawAccuracyGraph(name, dates, predictions, actuals, history=None, filename=
 		plt.savefig(filename)
 		print("Saved accuracy graph at %s." % filename)
 
-if __name__ == "__main__": #if this is the main file, parse the command args
+def init():
 	parser = argparse.ArgumentParser(description="Module that loads given datasets and trains and evaluates one or more neural network models on that.")
 	parser.add_argument('dataset', type=str, help="The filepath to the dataset/s.")
 	parser.add_argument('--models', type=str, help="A list of the models that are going to be trained and evaluated. Default is all available.")
@@ -215,8 +215,15 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.set_defaults(shuffle=False)
 	parser.add_argument('--trim-batch', dest='trim', action="store_true", help="Trim each dataset so that its length is divisible by the batch size.")
 	parser.set_defaults(trim=False)
+	parser.add_argument('--no-replace', dest='noReplace', action="store_true", help="If a model is already saved with the same filename, don't train and save the new model.")
+	parser.set_defaults(noReplace=False)
 
 	args, _ = parser.parse_known_args()
+
+	if args.noReplace and args.saveModel is not None:
+		if os.path.exists(args.saveModel+modelExtension):
+			print("The file already exists and the 'noReplace' flag is used.")
+			return #do not replace it
 
 	givenModels = [x.lower() for x in args.models.split(',')] if args.models else None
 
@@ -237,4 +244,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	print("Processed model arguments", modelArgs)
 
-	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim)
+	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim, noReplace=args.noReplace)
+
+if __name__ == "__main__": #if this is the main file, parse the command args
+	init()
