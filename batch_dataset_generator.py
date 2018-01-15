@@ -13,7 +13,9 @@ def run(group, folder):
 		distributions1 = ['balanceLastSeenDistribution_cpp_log2', 'contractBalanceLastSeenDistribution_log2_v2', 'contractVolumeInERC20Distribution_log2_v2_stateless', 'accountBalanceDistribution']
 
 		distributions2 =['balanceLastSeenDistribution_log1_2', 'contractBalanceLastSeenDistribution_log1_2_v2', 'contractVolumeInERC20Distribution_log1_2_v2_stateless', 'accountBalanceDistribution_log1_2']
+		basicProperties = ['highPrice,volumeFrom,volumeTo', 'highPrice_rel,volumeFrom_rel,volumeTo_rel']
 		distributions = []
+		distributions.extend(basicProperties)
 		distributions.extend(distributions1)
 		#distributions.extend(distributions2)
 		distributions.append(str.join(',', distributions1)) #append all other distributions, concatenated into a string
@@ -25,6 +27,8 @@ def run(group, folder):
 
 				for target in ['highPrice_rel', 'highPrice_10max_rel', 'highPrice', 'highPrice_10max', 'uniqueAccounts', 'uniqueAccounts_rel']:
 					for model in ['stacked']:#, 'matrix']:
+						if 'volumeTo' in distribution: #it is a basic property
+							model = 'matrix'
 						for normalizationLevel in ['property', 'pixel', 'local']:
 							for window in [8, 24, 104]:
 								if 'distribution' in distribution.lower() and model == 'matrix' and window > 24:
