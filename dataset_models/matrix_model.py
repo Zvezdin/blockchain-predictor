@@ -131,11 +131,13 @@ class MatrixModel(DatasetModel):
 			#create a frame using sliding window 
 			frame = vals[i:i+window_size]
 
-			frames[i] = frame
-
 			for targetI in range(targetData.shape[1]):
 				nextPrices[i, targetI] = targetData[i+window_size][targetI] #get the price that should be predicted for this frame
 
+			if args['normalizationLevel'] == 'local':
+				frame, nextPrices[i] = self.local_normalization(frame, targetData[i], nextPrices[i])
+
+			frames[i] = frame
 			dates.append(allDates.iloc[i+window_size-1])
 
 		print("Head frames:")
