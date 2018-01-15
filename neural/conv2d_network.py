@@ -35,7 +35,7 @@ class Conv2DNetwork(NeuralNetwork):
 		return (newDataset, newLabels)
 
 	def load(self, filepath):
-		self.model = self.loadModelKeras(loadModel)
+		self.model = self.loadModelKeras(filepath)
 
 	def save(self, filepath):
 		self.saveModelKeras(self.model, filepath)
@@ -132,7 +132,7 @@ class Conv2DNetwork(NeuralNetwork):
 			self.mergeHistories(history, evalHist)
 
 		if args['activationMap'] is not None:
-			activationMap(args['activationMap'])
+			self.activationMap(args['activationMap'], dataset['test'])
 
 		return history
 			
@@ -147,10 +147,10 @@ class Conv2DNetwork(NeuralNetwork):
 		_, labels = self.reformat(dataset, labels) #don't reformat the dataset, predict() will reformat it
 		return self.scorePrediction(self.predict(dataset), labels)
 
-	def activationMap(layer_name):
+	def activationMap(self, layer_name, dataset):
 		print("Creating an activation map for layer %s." % layer_name)
 		intermediate_layer_model = Model(inputs=self.model.input, outputs=self.model.get_layer(layer_name).output)
-		units = intermediate_layer_model.predict(dataset['test'])
+		units = intermediate_layer_model.predict(dataset)
 
 		print(units.shape)
 
