@@ -143,6 +143,23 @@ class NeuralNetwork(abc.ABC):
 				history[key].append(newPart[key])
 
 	@staticmethod
+	def activationMap(model, layer_name, dataset, n_columns=6):
+		print("Creating an activation map for layer %s." % layer_name)
+		intermediate_layer_model = Model(inputs=model.input, outputs=model.get_layer(layer_name).output)
+		units = intermediate_layer_model.predict(dataset)
+
+		print(units.shape)
+
+		filters = units.shape[3]
+		plt.figure(1, figsize=(20,20))
+		n_rows = math.ceil(filters / n_columns) + 1
+		for i in range(filters):
+			plt.subplot(n_rows, n_columns, i+1)
+			plt.title('Filter ' + str(i))
+			plt.imshow(units[0,:,:,i], interpolation="nearest")
+		plt.show()
+
+	@staticmethod
 	def plotModel(model):
 		plot_model(model, to_file='model.png')
 
