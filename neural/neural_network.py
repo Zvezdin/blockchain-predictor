@@ -1,4 +1,5 @@
 import abc
+import sys, os
 
 import numpy as np
 import math
@@ -6,6 +7,12 @@ from sklearn.metrics import mean_squared_error
 from keras.utils import plot_model
 from keras import backend as K
 from keras.models import load_model
+
+sys.path.insert(0, os.path.realpath('./dataset_models'))
+
+from aroundZeroNormalizer import AroundZeroNormalizer
+from basicNormalizer import BasicNormalizer
+from imageNormalizer import ImageNormalizer
 
 class NeuralNetwork(abc.ABC):
 
@@ -74,7 +81,7 @@ class NeuralNetwork(abc.ABC):
 		correct_signs = 0.0
 		absolutePrices = True
 
-		if len(labels[labels<0]) > len(labels) * 0.07: #if the negative values are more than 7% of all values
+		if len(labels[labels<0]) > 0: #if there are negative values
 			absolutePrices = False #they are relative
 
 		print("Working with %s values." % ('absolute' if absolutePrices else 'relative'))
@@ -87,7 +94,9 @@ class NeuralNetwork(abc.ABC):
 				if i == 0:
 					continue
 				else:
-					if (labels[i] - labels[i-1]) * (prediction[i] - prediction[i-1]) > 0: #if the sign of the change is the same
+					if np.isclose(labels[i] - labels[i-1], 0) and np.isclose(prediction[i] - prediction[i-1], 0): #the case of zero difference
+						correct_signs += 1
+					elif (labels[i] - labels[i-1]) * (prediction[i] - prediction[i-1]) > 0: #if the sign of the change is the same
 						correct_signs += 1
 		
 		correct_signs /= len(labels)
@@ -141,6 +150,20 @@ class NeuralNetwork(abc.ABC):
 				history[key].extend(newPart[key])
 			else:
 				history[key].append(newPart[key])
+
+	@staticmethod
+	def reverse_target_normalization(targets, normalizationList):
+		if targets.shape[1] != len(normalizationList):
+			raise ValueError("Mismatch between target length (%d) and normalizationList length (%d)." %(len(targets), len(normalizationList)))
+		
+		newTargets = np.ndarray(targets.shape)
+
+		for i in range(targets.shape[1]):
+			if normalizationList[i] is not None:
+				newTargets[:, i] = normalizationList[i].inverse_transform(targets[:, i])
+			else:
+				newTargets[:, i] = targets[:, i]
+		return newTargets
 
 	@staticmethod
 	def activationMap(model, layer_name, dataset, n_columns=6):
