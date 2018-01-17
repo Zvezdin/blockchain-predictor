@@ -97,7 +97,7 @@ class Conv2DNetwork(NeuralNetwork):
 
 		self.plotModel(self.model)
 
-	def train(self, givenDataset, givenLabels, args = {}):
+	def train(self, givenDataset, givenLabels, args = {}, targetNormalization = None):
 		if 'epoch' not in args:
 			args['epoch'] = 5
 		if 'batch' not in args:
@@ -126,7 +126,11 @@ class Conv2DNetwork(NeuralNetwork):
 			epochHist = self.model.fit(dataset['train'], labels['train'], validation_data=(dataset['test'], labels['test']), epochs=1, batch_size=args['batch'], verbose=1, shuffle=False)
 
 			prediction = self.model.predict(dataset['test'], batch_size=args['batch'])
-			evalHist = self.scorePrediction(prediction, labels['test'])[0]
+			currLabels = labels['test']
+			if targetNormalization is not None:
+				prediction = self.reverse_target_normalization(prediction, targetNormalization)
+				currLabels = self.reverse_target_normalization(currLabels, targetNormalization)
+			evalHist = self.scorePrediction(prediction, currLabels)[0]
 
 			self.mergeHistories(history, epochHist.history)
 			self.mergeHistories(history, evalHist)
