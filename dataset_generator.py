@@ -118,7 +118,7 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None, 
 			raise ValueError("Error: Length mismatch in the data properties.")
 
 	#feed the model the properties and let it generate
-	dataset, dates, nextPrices =  model.generate(properties, args)
+	dataset, dates, nextPrices, targetNorms =  model.generate(properties, args)
 
 	labels, dates = generateLabels(dates, nextPrices, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
 
@@ -126,7 +126,14 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None, 
 		print("Mismatch in lengths of dataset and labels, removing excessive entries")
 		dataset = dataset[:len(labels)] #remove dataframes for which we have no labels
 
-	return (dataset, labels, dates)
+	package = {
+		'dataset': dataset,
+		'dates': dates,
+		'labels': nextPrices,
+		'normalization': targetNorms
+	}
+
+	return package
 
 def generateLabels(dates, nextPrices, ticks, labelsType):
 	"""Generates dataset labels for each passed date, getting data from ticks. dates MUST BE CHRONOLOGICALLY ORDERED. """
@@ -164,12 +171,16 @@ def generateLabels(dates, nextPrices, ticks, labelsType):
 	elif labelsType == 'full': #nothing to do, the prices are already given and are normalized
 		return (nextPrices, dates)
 
-def randomizeDataset(dataset, labels, dates):
-	permutation = np.random.permutation(labels.shape[0])
-	shuffled_dataset = dataset[permutation,:,:]
-	shuffled_labels = labels[permutation]
-	shuffled_dates = dates[permutation]
-	return shuffled_dataset, shuffled_labels, shuffled_dates
+def randomizeDataset(dataset):
+	main = dataset['dataset']
+	permutation = np.random.permutation(main)
+
+	for key in dataset:
+		if type(dataset[key]) != np.ndarray or len(dataset[key]) != len(main):
+			print("Unable to shuffle key %s. Leaving it as is." % key)
+			continue
+		dataset[key] = dataset[key][permutation]
+	return dataset
 
 def saveDataset(filename, data):
 	if save:
@@ -191,27 +202,23 @@ def run(model, properties, start, end, filename, labels, ratio, shuffle, args, p
 		return
 
 	#generate the dataset
-	dataset, labels, dates = generateDataset(model, properties.split(','), labels, start, end, args, preprocess)
-
-	print("Generated dataset and labels with length %s." % labels.shape[0])
+	dataset = generateDataset(model, properties.split(','), labels, start, end, args, preprocess)
 
 	if shuffle:
 		#randomize it
-		dataset, labels, dates = randomizeDataset(dataset, labels, dates)
+		dataset = randomizeDataset(dataset)
 		print("Randomized dataset and labels.")
 
 	if len(ratio) == 1:
-		data = {
-			'dataset': dataset,
-			'labels': labels,
-			'dates': dates
-		}
+		data = dataset
 	else:
 		data = []
 
 		split = [] #the lenghts of the dataset pieces
+
+		mainLen = len(dataset['dataset'])
 		for rat in ratio:
-			split.append( int((rat * len(dataset)) / np.sum(ratio)) ) #calculate the length by keeping the given ratio
+			split.append( int((rat * mainLen) / np.sum(ratio)) ) #calculate the length by keeping the given ratio
 
 		print(split, ratio)
 
@@ -220,11 +227,16 @@ def run(model, properties, start, end, filename, labels, ratio, shuffle, args, p
 		for i, spl in enumerate(split):
 			end = (spl + index) if i != len(split) -1 else None #because of integer division, add anything left on the last iteration
 
-			data.append({
-				'dataset': dataset[index:end],
-				'labels': labels[index:end],
-				'dates': dates[index:end]
-			})
+			newDataset = {}
+
+			for key in dataset:
+				if type(dataset[key]) != np.ndarray or len(dataset[key]) != mainLen:
+					newDataset[key] = dataset[key]
+					print("Unable to split key %s. Leaving it as is." % key)
+				else:
+					newDataset[key] = dataset[key][index:end]
+			data.append(newDataset)
+
 			index += spl
 
 	#save it
