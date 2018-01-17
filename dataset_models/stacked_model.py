@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from imageNormalizer import ImageNormalizer
 from dataset_model import DatasetModel
 
 debug = True
@@ -18,12 +19,12 @@ class StackedModel(DatasetModel):
 		#argument defaults
 		args.setdefault('window', 24)
 		args.setdefault('normalize', True)
-		args.setdefault('normalizationLevel', 'local') #'property', 'pixel', 'local'
-		args.setdefault('normalizationStd', 'local') #'local', 'global'
+		args.setdefault('normalizationLevel', 'pixel') #'property', 'pixel', 'local'
+		args.setdefault('normalizationStd', 'global') #'local', 'global'
 		args.setdefault('target', ['highPrice_10max'])
 		args.setdefault('localNormalize', [None])
 		args.setdefault('defaultNormalization', 'basic')
-		args.setdefault('normalization', {'highPrice_rel': 'around_zero', 'balanceLastSeenDistribution_cpp_log2_rel': 'around_zero'})
+		args.setdefault('normalization', {'propertyName': 'normalizationAlgorithm'})
 		args.setdefault('binary', False)
 		args.setdefault('blacklistTarget', True)
 		args.setdefault('invert', False)
@@ -34,6 +35,7 @@ class StackedModel(DatasetModel):
 
 		propertyValues = np.ndarray((properties[0].shape[0], args['width'], args['height']))
 		targetData = None
+		targetNorms = []
 
 		currentRow = 0
 		currentCol = 0
@@ -52,7 +54,7 @@ class StackedModel(DatasetModel):
 
 			if debug: print("Debug", v.shape)
 
-			if type(v[0]) == np.ndarray: #matrix model doesn't support multi dim value arrays. Flatten them.
+			if type(v[0]) == np.ndarray: #Convert everything into a large np array
 				v = np.array([x for x in v]) #currently, v is a np array of np arrays. This is to force everything to one large ndarray
 				v = v.swapaxes(1, 2) # swap the prop value count with the width.
 
@@ -61,12 +63,15 @@ class StackedModel(DatasetModel):
 
 			if debug: print("Debug v2", v.shape)
 
+			norm = None
+
 			#we have the property values. Normalize or not.
 			if args['normalize'] and args['normalizationLevel'] == 'property':
 				normalization = args['normalization'].get(propName, args['defaultNormalization'])
 				if propName not in args['localNormalize']: #local normalization happens via another way
 					print("Globally normalizing property %s with method %s." % (propName, normalization))
-					v = self.normalize(v, normalization)
+					norm = self.normalize(v, normalization)
+					v = norm.transform(v)
 
 			if args['binary']:
 				print("Converting data to binary! May cause issues.")
@@ -74,6 +79,9 @@ class StackedModel(DatasetModel):
 
 			#add to our target
 			if propName in args['target']:
+				if not (norm is None and args['normalize']):
+					targetNorms.append(norm) #save the normalization for later conversion
+				
 				flattened = v.flatten(order='C') #the outputs cannot be spatial
 				flattened = flattened.reshape((flattened.shape[0], 1))
 				if targetData is None:
@@ -120,27 +128,13 @@ class StackedModel(DatasetModel):
 
 		if args['normalize']:
 			if args['normalizationLevel'] == 'pixel':
-				meanFrame = np.ndarray((propertyValues.shape[1], propertyValues.shape[2]))
-				stdFrame = np.ndarray(meanFrame.shape)
+				norm = ImageNormalizer(propertyValues)
+				tarNorm = ImageNormalizer(targetData)
 
-				for i in range(propertyValues.shape[1]):
-					for j in range(propertyValues.shape[2]):
-						meanFrame[i,j] = np.mean(propertyValues[:, i, j])
-						stdFrame[i,j] = np.std(propertyValues[:, i, j])
-				for i in range(propertyValues.shape[0]):
-					propertyValues[i, :, :] -= meanFrame
+				propertyValues = norm.transform(propertyValues)
+				targetData = tarNorm.transform(targetData)
 
-				if args['normalizationStd'] == 'local':
-					propertyValues = np.divide(propertyValues, stdFrame, where=stdFrame!=0)
-				elif args['normalizationStd'] == 'global':
-					propertyValues = propertyValues / np.std(propertyValues)
-				else:
-					raise ValueError("Unknown setting for normalizationStd - %s" % (args['normalizationStd']))
-
-				print("Generating target data with mean %d" % np.mean(targetData))
-
-				targetData = targetData - np.mean(targetData)
-				targetData = targetData / np.std(targetData)
+				targetNorms.append(tarNorm)
 
 		print(targetData, targetData.shape)
 
@@ -167,9 +161,8 @@ class StackedModel(DatasetModel):
 				nextPrices[i, targetI] = targetData[i+window_size][targetI] #get the price that should be predicted for this frame
 
 			if args['normalizationLevel'] == 'local':
+				raise NotImplementedError("Local normalization is not yet supported by the new normalization API")
 				frame, nextPrices[i] = self.local_normalization(frame, targetData[i], nextPrices[i])
-				print("After division:", max(frame))
-				print("%f max, %f std and %f var" % (frame.max(), frame.std(), frame.var()))
 
 			frames[i] = frame
 			dates.append(allDates.iloc[i+window_size-1])
@@ -189,7 +182,7 @@ class StackedModel(DatasetModel):
 		if args['invert']:
 			frames = 1-frames
 
-		return (frames, dates, nextPrices)
+		return (frames, dates, nextPrices, targetNorms)
 
 	def canPlacePropertyInSpace(self, space, prop, usedSpace, row, col):
 		return usedSpace[row: row+prop.shape[1], col: col+prop.shape[2]].sum() == 0
