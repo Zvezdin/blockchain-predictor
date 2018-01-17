@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from imageNormalizer import ImageNormalizer
 from dataset_model import DatasetModel
 
 
@@ -36,6 +37,7 @@ class MatrixModel(DatasetModel):
 
 		propertyValues = None
 		targetData = None
+		targetNorms = []
 
 		for i in range(0, len(properties)):
 			prop = properties[i].drop('date', axis=1)
@@ -57,12 +59,15 @@ class MatrixModel(DatasetModel):
 			if len(v.shape) == 1:
 				v = np.reshape(v, (v.shape[0], 1))
 
+			norm = None
+
 			#we have the property values. Normalize or not.
 			if args['normalize'] and args['normalizationLevel'] == 'property':
 				normalization = args['normalization'].get(propName, args['defaultNormalization'])
 				if propName not in args['localNormalize']: #local normalization happens via another way
 					print("Globally normalizing property %s with method %s." % (propName, normalization))
-					v = self.normalize(v, normalization)
+					norm = self.normalize(v, normalization)
+					v = norm.transform(v)
 
 			if args['binary']:
 				print("Converting data to binary! May cause issues.")
@@ -70,6 +75,9 @@ class MatrixModel(DatasetModel):
 
 			#add to our target
 			if propName in args['target']:
+				if not (norm is None and args['normalize']):
+					targetNorms.append(norm) #save the normalization for later conversion
+				
 				if targetData is None:
 					targetData = v
 				else:
@@ -89,26 +97,13 @@ class MatrixModel(DatasetModel):
 
 
 		if args['normalize'] and args['normalizationLevel'] == 'pixel':
-			meanFrame = np.ndarray((propertyValues.shape[1]))
-			stdFrame = np.ndarray(meanFrame.shape)
+			norm = ImageNormalizer(propertyValues)
+			tarNorm = ImageNormalizer(targetData)
 
-			for i in range(propertyValues.shape[1]):
-				meanFrame[i] = np.mean(propertyValues[:, i])
-				stdFrame[i] = np.std(propertyValues[:, i])
-			for i in range(propertyValues.shape[0]):
-				propertyValues[i, :] = propertyValues[i, :] - meanFrame
+			propertyValues = norm.transform(propertyValues)
+			targetData = tarNorm.transform(targetData)
 
-			if args['normalizationStd'] == 'local':
-				propertyValues = np.divide(propertyValues, stdFrame, where=stdFrame!=0)
-			elif args['normalizationStd'] == 'global':
-				propertyValues = propertyValues / np.std(propertyValues)
-			else:
-				raise ValueError("Unknown setting for normalizationStd - %s" % (args['normalizationStd']))
-
-			print("Generating target data with mean %d" % np.mean(targetData))
-
-			targetData = targetData - np.mean(targetData)
-			targetData = targetData / np.std(targetData)
+			targetNorms.append(tarNorm)
 
 
 		print(targetData)
@@ -135,6 +130,7 @@ class MatrixModel(DatasetModel):
 				nextPrices[i, targetI] = targetData[i+window_size][targetI] #get the price that should be predicted for this frame
 
 			if args['normalizationLevel'] == 'local':
+				raise NotImplementedError("Local normalization is not yet supported by the new normalization API")
 				frame, nextPrices[i] = self.local_normalization(frame, targetData[i], nextPrices[i])
 
 			frames[i] = frame
@@ -155,4 +151,4 @@ class MatrixModel(DatasetModel):
 		if args['invert']:
 			frames = 1-frames
 
-		return (frames, dates, nextPrices)
+		return (frames, dates, nextPrices, targetNorms)
