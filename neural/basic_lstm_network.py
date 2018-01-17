@@ -10,15 +10,37 @@ from sklearn.metrics import mean_squared_error
 
 class BasicLSTMNetwork(NeuralNetwork):
 	def __init__(self):
-		self.name="LSTM"
+		self.name = "LSTM"
 		self.model = None
+		self.cut_timesteps = False
+		self.batch_size = None
 
-	def train(self, givenDataset, givenLabels, args = {}, loadModel = None):
-		dataset = {}
-		labels = {}
+	def reformat(self, dataset, labels, cut_timesteps=False):
+		newLabels = None
 
-		if 'epoch' not in args:
-			args['epoch'] = 5
+		if labels is not None:
+			newLabels = labels.astype(np.float32) #shape of labels is (samples, targets)
+
+		if len(dataset.shape) == 3:
+			#shape is N,time_steps,features
+			newDataset = np.reshape(dataset, (-1, dataset.shape[1], dataset.shape[2]))
+
+		elif len(dataset.shape) >= 4:
+			raise ValueError("Unable to handle 4+D input shape %s!" % str(dataset.shape))
+
+		if cut_timesteps:
+			print("Warning! Cutting all previous timesteps")
+			newDataset = np.reshape(newDataset[:, -1, :], (-1, 1, newDataset.shape[2])) #cut except the latest time step
+
+		return (newDataset, newLabels)
+
+	def load(self, filepath):
+		self.model = self.loadModelKeras(filepath)
+
+	def save(self, filepath):
+		self.saveModelKeras(self.model, filepath)
+
+	def build(self, inputShape, numTargets, args = {}):
 		if 'LSTM' not in args:
 			args['LSTM'] = [128, 256]
 		elif type(args['LSTM']) != list:
@@ -35,116 +57,93 @@ class BasicLSTMNetwork(NeuralNetwork):
 			args['stateful'] = False
 		if 'cut_timesteps' not in args:
 			args['cut_timesteps'] = False
+		
+		self.cut_timesteps = args['cut_timesteps']
+		self.batch_size = args['batch']
+
+		features = inputShape[2]
+		time_steps = inputShape[1]
+
+		if self.cut_timesteps:
+			time_steps = 1
 
 		#remove any zero-size LSTM/dense layers
 		for arr in [args['LSTM'], args['dense']]:
 			while 0 in arr: arr.remove(0)
 
-		features = givenDataset['train'].shape[2]
-		time_steps = givenDataset['train'].shape[1]
+		self.model = Sequential()
+
+		for i, layer in enumerate(args['LSTM']):
+			ret_seq=(i< (len(args['LSTM'])-1))
+			name = str(layer)+ '_' + str(i+1) + ('_ret_seq' if ret_seq else '')
+			if i==0:
+				self.model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features), name=name ) )
+				self.model.add(Dropout(0.1, name='0.1'))
+			else:
+				self.model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], name=name) )
+			#model.add(Activation('relu'))
+			print("Adding LSTM Layer of size %d." % layer)
+
+		for dense in args['dense']:
+			self.model.add(Dense(dense))
+			#model.add(Activation('relu'))
+
+		self.model.add(Dense(numTargets, name=str(numTargets)))
+		self.model.add(Activation('linear', name='linear'))
+
+		#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
+
+		opt = Adam(args['lr'])
+
+		self.model.compile(loss='mean_squared_error', optimizer=opt)
+
+		self.plotModel(self.model)
+
+	def train(self, givenDataset, givenLabels, args = {}):
+		dataset = {}
+		labels = {}
+
+		if 'epoch' not in args:
+			args['epoch'] = 5
+		if 'batch' not in args:
+			args['batch'] = 16
+		args.setdefault('randomData', False)
 
 
-		for kind in ['warm', 'train', 'test']:
-			#reformat only the labels first
-			labels[kind] = givenLabels[kind].astype(np.float32) #shape of labels is (samples, targets)
+		for kind in givenDataset:
+			dataset[kind], labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind])
 
-			self.num_targets = labels[kind].shape[1]
-			#_, labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], features, time_steps, num_labels)
-			#reformat the dataset for LSTM format of [samples, time steps, features]
-			dataset[kind] = np.reshape(givenDataset[kind], (-1, givenDataset[kind].shape[1], givenDataset[kind].shape[2]))
-
-			if args['cut_timesteps']:
-				print("Warning! Cutting all previous timesteps")
-				dataset[kind] = np.reshape(dataset[kind][:, -1, :], (-1, 1, givenDataset[kind].shape[2])) #cut except the latest time step
-				time_steps = 1
+			if args['randomData']:
+				dataset[kind] = np.random.rand(*dataset[kind].shape)
 
 			print('%s dataset with initial shape %s and resulting shape %s with labels %s' % (kind, givenDataset[kind].shape, dataset[kind].shape, labels[kind].shape))
 
+		if self.model == None: #if no model, build it
+			print("Building model.")
+			self.build(dataset['train'].shape, labels['train'].shape[1], args)
+
 		history = {}
 
-		if loadModel is not None:
-			model = self.loadModelKeras(loadModel)
-		else:
-			model = Sequential()
+		for i in range(args['epoch']):
+			if args['stateful']:
+				self.model.predict(dataset['warm'], batch_size=args['batch']) #predict so that fitting starts with a state
+			epochHist = self.model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], validation_data=(dataset['test'], labels['test']), verbose=1, shuffle=False)
+			if args['stateful']:
+				self.model.reset_states()
+			
+			prediction = self.model.predict(dataset['test'], batch_size=args['batch'])
+			evalHist = self.scorePrediction(prediction, labels['test'])[0]
 
-			for i, layer in enumerate(args['LSTM']):
-				ret_seq=(i< (len(args['LSTM'])-1))
-				name = str(layer)+ '_' + str(i+1) + ('_ret_seq' if ret_seq else '')
-				if i==0:
-					model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features), name=name ) )
-					model.add(Dropout(0.1, name='0.1'))
-				else:
-					model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], name=name) )
-				#model.add(Activation('relu'))
-				print("Adding LSTM Layer of size %d." % layer)
-
-			for dense in args['dense']:
-				model.add(Dense(dense))
-				#model.add(Activation('relu'))
-
-			model.add(Dense(self.num_targets, name=str(self.num_targets)))
-			model.add(Activation('linear', name='linear'))
-
-			#model.add(PReLU(alpha_initializer='zeros', alpha_regularizer=None, alpha_constraint=None, shared_axes=None))
-
-			opt = Adam(args['lr'])
-
-			model.compile(loss='mean_squared_error', optimizer=opt)
-
-			self.plotModel(model)
-
-			val = (dataset['test'], labels['test'])
-
-			for i in range(args['epoch']):
-				if not args['stateful']:
-					epochHist = model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], validation_data=val, verbose=1, shuffle=False)
-				else:
-					model.predict(dataset['warm'], batch_size=args['batch']) #predict so that fitting starts with a state
-					epochHist = model.fit(dataset['train'], labels['train'], epochs=1, batch_size=args['batch'], validation_data=val, verbose=1, shuffle=False)
-					model.reset_states()
-				prediction = {}
-				prediction['test'] = model.predict(dataset['test'], batch_size=args['batch'])
-
-				evalHist = self.scorePrediction(prediction, labels, 'test', self.num_targets)[0]
-
-				for key in evalHist: #temporary workaround
-					evalHist[key] = evalHist[key]['test']
-
-				print(evalHist)
-
-				for scoresDict in [epochHist.history, evalHist]:
-					for key in scoresDict:
-						if key not in history:
-							history[key] = []
-						if type(scoresDict[key]) == list:
-							history[key].extend(scoresDict[key])
-						else:
-							history[key].append(scoresDict[key])
-
-		# make predictions
-		self.prediction = {}
-
-		predictionBatch = args['batch']
-
-		model.predict(dataset['warm'], batch_size=predictionBatch)
-		self.prediction['train'] = model.predict(dataset['train'], batch_size=predictionBatch)
-		self.prediction['test'] = model.predict(dataset['test'], batch_size=predictionBatch)
-		model.reset_states()
-
-		print(self.prediction['test'].shape)
-
-		self.scorePrediction(self.prediction, labels, 'train', self.num_targets)
-		self.scorePrediction(self.prediction, labels, 'test', self.num_targets)
-
-		self.model = model
+			self.mergeHistories(history, epochHist.history)
+			self.mergeHistories(history, evalHist)
 
 		return history
 
-	def predict(self, setType):
-		return self.prediction[setType]
+	def predict(self, dataset):
+		dataset, _ = self.reformat(dataset, None, cut_timesteps=self.cut_timesteps)
 
-	def evaluate(self, setType):
-		pass #TODO implement
+		return self.model.predict(dataset, batch_size=self.batch_size)
 
-	def save(self, filepath):
-		self.saveModelKeras(self.model, filepath)
+	def evaluate(self, dataset, labels):
+		_, labels = self.reformat(dataset, labels, cut_timesteps=self.cut_timesteps) #don't reformat the dataset, predict() will reformat it
+		return self.scorePrediction(self.predict(dataset), labels)
