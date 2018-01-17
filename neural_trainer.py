@@ -7,6 +7,8 @@ import argparse
 import pickle
 
 import numpy as np
+import matplotlib as mpl
+mpl.use('Agg') #for use without X server. Disable if needed
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
@@ -15,9 +17,9 @@ from neural_network import NeuralNetwork
 from custom_deep_network import CustomDeepNetwork
 from basic_lstm_network import BasicLSTMNetwork
 from conv2d_network import Conv2DNetwork
+from conv3d_network import Conv3DNetwork
 
-#TODO: Temporary removed [CustomDeepNetwork(), BasicLSTMNetwork(), Conv2DNetwork()]
-globalModels = [Conv2DNetwork()]
+globalModels = [Conv2DNetwork(), Conv3DNetwork(), BasicLSTMNetwork()]
 
 modelExtension = '.h5'
 historyExtension = '.pickle'
@@ -42,6 +44,7 @@ def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet
 	dataset = {}
 	labels = {}
 	dates = {}
+	normalization = {}
 
 	history = {}
 
@@ -58,6 +61,8 @@ def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet
 		labels[kind] = rawDataset[i]['labels'][:targetLen]
 
 		dates[kind] = rawDataset[i]['dates'][:targetLen]
+
+		normalization[kind] = rawDataset[i]['normalization']
 
 
 	selectedModels = []
@@ -78,7 +83,7 @@ def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet
 	for model in selectedModels:
 		if loadModel:
 			model.load(loadModel)
-		history[model.name] = model.train(dataset, labels, modelArgs)
+		history[model.name] = model.train(dataset, labels, modelArgs, targetNormalization = normalization['train'])
 
 		print(history[model.name])
 
@@ -105,14 +110,12 @@ def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet
 		datesList = []
 
 		for setType in ['train', 'test']:
-			print("Scores for model %s, dataset %s:" % (model.name, setType))
-			print(model.evaluate(dataset[setType], labels[setType]))
-
-			res = model.predict(dataset[setType])
+			res = NeuralNetwork.reverse_target_normalization(model.predict(dataset[setType]), normalization[setType])
+			actual = NeuralNetwork.reverse_target_normalization(labels[setType], normalization[setType])
 
 			p = dates[setType].argsort()
 			predictions.append(res[p])
-			actuals.append(labels[setType][p])
+			actuals.append(actual[p])
 			datesList.append(dates[setType][p])
 
 		filename = None
