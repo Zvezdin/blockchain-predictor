@@ -31,11 +31,12 @@ debug = False
 
 labelKey = 'closePrice'
 
-def generateDataset(modelName, propertyNames, labelsType, start=None, end=None, args = {}, preprocess = {}):
-	print("Generating dataset for properties ", propertyNames, "and using model", modelName, "for range", start, end)
+def generateDataset(modelName, propertyNames, targetNames, labelsType='full', start=None, end=None, args = {}, preprocess = {}):
+	print("Generating dataset for properties %s, targets %s, model %s and range from %s to %s." % (str(propertyNames), str(targetNames), modelName, str(start), str(end)))
 
-	while '' in propertyNames:
-		propertyNames.remove('')
+	for arr in [propertyNames, targetNames]:
+		while '' in arr:
+			arr.remove('')
 
 	model = None
 
@@ -49,76 +50,81 @@ def generateDataset(modelName, propertyNames, labelsType, start=None, end=None, 
 		return
 
 	properties = []
+	targets = []
 
 	#make sure we don't go off bounds for any property
-	start, end = db.getMasterInterval(chunkStore, propertyNames, start, end)
+	start, end = db.getMasterInterval(chunkStore, propertyNames+targetNames, start, end)
 
 	#load the needed properties
-	for prop in propertyNames:
-		data = db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN)
+	for dataType, inputData in [('property', propertyNames), ('target', targetNames)]:
+		for prop in inputData:
+			data = db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN)
 
-		if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
-			print("Running numpy array Arctic workaround for prop %s..." % prop)
-			data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
+			if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
+				print("Running numpy array Arctic workaround for prop %s..." % prop)
+				data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
 
-		if prop in preprocess:
-			settings = preprocess[prop]
-			if 'scale' in settings:
-				if settings['scale'] == 'log2':
-					scaleF = np.log2
-				elif settings['scale'] == 'log10':
-					scaleF = np.log10
+			if prop in preprocess:
+				settings = preprocess[prop]
+				if 'scale' in settings:
+					if settings['scale'] == 'log2':
+						scaleF = np.log2
+					elif settings['scale'] == 'log10':
+						scaleF = np.log10
+					else:
+						raise ValueError("Unsupported scale type %s for preprocessing of property %s!" % (settings['scale'], prop))
+
+					def scale(val):
+						global globalMin
+
+						if globalMin < 0: #if we have relative values
+							val -= globalMin #turn all negatives to positives
+
+						val = scaleF(val)
+						val[val<0] = 0 #log if 0 is -inf
+
+						return val
 				else:
-					raise ValueError("Unsupported scale type %s for preprocessing of property %s!" % (settings['scale'], prop))
+					scale = lambda x: x #no scaling
 
-				def scale(val):
+				xAxis = ':'
+				yAxis = ':'
+				
+				if 'slices' in settings:
+					xAxis, yAxis = settings['slices']
+
+				strToSlice = lambda string: slice(*map(lambda x: int(x.strip()) if x.strip() else None, string.split(':')))
+
+				xAxis = strToSlice(xAxis)
+				yAxis = strToSlice(yAxis)
+
+				print("Slicing data by %s and %s." % (str(xAxis), str(yAxis)))
+
+				data[prop] = data[prop].apply(lambda x: x[yAxis, xAxis]) # trim
+
+				global globalMin #we need the minimum single value, to see if the property is realtive or not
+				globalMin = 0
+
+				def findMin(x):
 					global globalMin
+					globalMin = min(globalMin, np.min(x))
+					return x
 
-					if globalMin < 0: #if we have relative values
-						val -= globalMin #turn all negatives to positives
+				data[prop].apply(findMin)
 
-					val = scaleF(val)
-					val[val<0] = 0 #log if 0 is -inf
+				data[prop] = data[prop].apply(lambda x: scale(x)) # scale
 
-					return val
-			else:
-				scale = lambda x: x #no scaling
-
-			xAxis = ':'
-			yAxis = ':'
-			
-			if 'slices' in settings:
-				xAxis, yAxis = settings['slices']
-
-			strToSlice = lambda string: slice(*map(lambda x: int(x.strip()) if x.strip() else None, string.split(':')))
-
-			xAxis = strToSlice(xAxis)
-			yAxis = strToSlice(yAxis)
-
-			print("Slicing data by %s and %s." % (str(xAxis), str(yAxis)))
-
-			data[prop] = data[prop].apply(lambda x: x[yAxis, xAxis]) # trim
-
-			global globalMin #we need the minimum single value, to see if the property is realtive or not
-			globalMin = 0
-
-			def findMin(x):
-				global globalMin
-				globalMin = min(globalMin, np.min(x))
-				return x
-
-			data[prop].apply(findMin)
-
-			data[prop] = data[prop].apply(lambda x: scale(x)) # scale
-
-		properties.append(data)
+			if dataType == 'property':
+				properties.append(data)
+			if dataType == 'target':
+				targets.append(data)
 
 	for prop in properties:
 		if len(properties[0]) != len(prop):
 			raise ValueError("Error: Length mismatch in the data properties.")
 
 	#feed the model the properties and let it generate
-	dataset, dates, nextPrices, targetNorms =  model.generate(properties, args)
+	dataset, dates, nextPrices, targetNorms =  model.generate(properties, targets, args)
 
 	labels, dates = generateLabels(dates, nextPrices, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
 
@@ -191,18 +197,15 @@ def saveDataset(filename, data):
 		except Exception as e:
 			print('Unable to save data to', filename, ':', e)
 
-def run(model, properties, start, end, filename, labels, ratio, shuffle, args, preprocess = {}):
-	start = dateutil.parser.parse(start) if start is not None else None
-	end = dateutil.parser.parse(end) if end is not None else None
-
-	try:
-		ratio = [int(x) for x in ratio.split(':')]
-	except ValueError:
-		print("Error while reading the given ratio. Did you format it in the correct way?")
-		return
+def run(model, properties, targets, filename, start=None, end=None, ratio=[1], shuffle=False, args={}, preprocess={}):
+	if type(properties) != list:
+		properties = [properties]
+	if type(targets) != list:
+		targets = [targets]
+	
 
 	#generate the dataset
-	dataset = generateDataset(model, properties.split(','), labels, start, end, args, preprocess)
+	dataset = generateDataset(model, properties, targets, start=start, end=end, args=args, preprocess=preprocess)
 
 	if shuffle:
 		#randomize it
@@ -244,14 +247,14 @@ def run(model, properties, start, end, filename, labels, ratio, shuffle, args, p
 		saveDataset(filename, data)
 		print("saved dataset and labels as %a." % filename)
 
-if __name__ == "__main__":
+def init():
 	parser = argparse.ArgumentParser(description="Generates a dataset by compiling generated data properties using a certain dataset model")
 	parser.add_argument('--model', type=str, default='matrix', help='The name of the dataset model to use. Defaults to matrix.')
 	parser.add_argument('properties', type=str, default='openPrice,closePrice,gasPrice', help='A list of the names of the properties to use, separated by a comma.')
+	parser.add_argument('targets', type=str, default='highPrice', help='A list of target property names, separated by a comma.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--filename', type=str, default=None, help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
-	parser.add_argument('--labels', type=str, default='full', choices=['boolean', 'full'], help='What kind of labels should be generated for each dataframe. "boolean" contains only the sign of the course, "full" consists of all other target predictions.')
 	parser.add_argument('--ratio', type=str, default='1', help='On how many fragments to split the main dataset. For example, "1:2:3" will create three datasets with sizes proportional to what given.')
 	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=False)
@@ -262,4 +265,19 @@ if __name__ == "__main__":
 		filename = "data/dataset_" + str(args.start) + "-" + str(args.end) + ".pickle"
 	else: filename = args.filename
 
-	run(args.model, args.properties, args.start, args.end, filename, args.labels, args.ratio, args.shuffle, {})
+	start = args.start
+	end = args.end
+
+	start = dateutil.parser.parse(start) if start is not None else None
+	end = dateutil.parser.parse(end) if end is not None else None
+
+	try:
+		ratio = [int(x) for x in args.ratio.split(':')]
+	except ValueError:
+		print("Error while reading the given ratio. Did you format it in the correct way?")
+		return
+
+	run(args.model, args.properties.split(','), args.targets.split(','), filename, start=start, end=end, ratio=ratio, shuffle=args.shuffle)
+
+if __name__ == "__main__":
+	init()
