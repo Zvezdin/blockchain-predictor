@@ -10,7 +10,7 @@ class MatrixModel(DatasetModel):
 		self.name="matrix"
 		self.requires=[]
 
-	def generate(self, properties, args = {}):
+	def generate(self, properties, targets, args = {}):
 		if not properties: return
 
 		#argument defaults
@@ -18,8 +18,6 @@ class MatrixModel(DatasetModel):
 			args['window'] = 104
 		if 'normalize' not in args:
 			args['normalize'] = True
-		if 'target' not in args:
-			args['target'] = ['highPrice_rel']
 		if 'localNormalize' not in args:
 			args['localNormalize'] = [None]#['stickPrice']
 		if 'defaultNormalization' not in args:
@@ -28,8 +26,6 @@ class MatrixModel(DatasetModel):
 			args['normalization'] = {'highPrice_rel': 'around_zero'}
 		if 'binary' not in args:
 			args['binary'] = False
-		if 'blacklistTarget' not in args:
-			args['blacklistTarget'] = True
 		if 'invert' not in args:
 			args['invert'] = False
 		args.setdefault('normalizationLevel', 'pixel') #or 'layer', 'pixel'
@@ -39,59 +35,59 @@ class MatrixModel(DatasetModel):
 		targetData = None
 		targetNorms = []
 
-		for i in range(0, len(properties)):
-			prop = properties[i].drop('date', axis=1)
+		print("Received %d properties and %d targets." % (len(properties), len(targets)))
 
-			if len(prop.columns) != 1:
-				raise ValueError("The received property contains more than one data column!")
-			propName = prop.columns[0]
+		for dataType, inputData in [('property', properties), ('target', targets)]:
+			for i, prop in enumerate(inputData):
+				prop = prop.drop('date', axis=1)
 
-			print("Processing property %s." % propName)
+				if len(prop.columns) != 1:
+					raise ValueError("The received property contains more than one data column!")
+				propName = prop.columns[0]
 
-			v = prop.values.swapaxes(0, 1)[0, :] #single list of the property values.
+				print("Processing property %s with type %s." % (propName, dataType))
 
-			print("Debug", v.shape)
+				v = prop.values.swapaxes(0, 1)[0, :] #single list of the property values.
 
-			if type(v[0]) == np.ndarray: #matrix model doesn't support multi dim value arrays. Flatten them.
-				print("Warning: Matrix model does not supoort property %s. It will be flattened." % propName)
-				v = np.array([x.flatten(order='C') for x in v])
+				print("Debug", v.shape)
 
-			if len(v.shape) == 1:
-				v = np.reshape(v, (v.shape[0], 1))
+				if type(v[0]) == np.ndarray: #matrix model doesn't support multi dim value arrays. Flatten them.
+					print("Warning: Matrix model does not supoort property %s. It will be flattened." % propName)
+					v = np.array([x.flatten(order='C') for x in v])
 
-			norm = None
+				if len(v.shape) == 1:
+					v = np.reshape(v, (v.shape[0], 1))
 
-			#we have the property values. Normalize or not.
-			if args['normalize'] and args['normalizationLevel'] == 'property':
-				normalization = args['normalization'].get(propName, args['defaultNormalization'])
-				if propName not in args['localNormalize']: #local normalization happens via another way
-					print("Globally normalizing property %s with method %s." % (propName, normalization))
-					norm = self.normalize(v, normalization)
-					v = norm.transform(v)
+				norm = None
 
-			if args['binary']:
-				print("Converting data to binary! May cause issues.")
-				v = self.conver_to_binary(v)
+				#we have the property values. Normalize or not.
+				if args['normalize'] and args['normalizationLevel'] == 'property':
+					normalization = args['normalization'].get(propName, args['defaultNormalization'])
+					if propName not in args['localNormalize']: #local normalization happens via another way
+						print("Globally normalizing property %s with method %s." % (propName, normalization))
+						norm = self.normalize(v, normalization)
+						v = norm.transform(v)
 
-			#add to our target
-			if propName in args['target']:
-				if not (norm is None and args['normalize']):
-					targetNorms.append(norm) #save the normalization for later conversion
-				
-				if targetData is None:
-					targetData = v
-				else:
-					targetData = np.append(targetData, v, axis=1)
+				if args['binary']:
+					print("Converting data to binary! May cause issues.")
+					v = self.conver_to_binary(v)
 
-				if args['blacklistTarget']:
-					continue #skip the property
+				#add to our target
+				if dataType == 'target':
+					if not (norm is None and args['normalize']):
+						targetNorms.append(norm) #save the normalization for later conversion
+					
+					if targetData is None:
+						targetData = v
+					else:
+						targetData = np.append(targetData, v, axis=1)
 
-			#add to our dataset
-			if propertyValues is None:
-				propertyValues = v
-			else:
-				propertyValues = np.append(propertyValues, v, axis=1)
-			print(propertyValues.shape)
+				if dataType == 'property':	#add to our dataset
+					if propertyValues is None:
+						propertyValues = v
+					else:
+						propertyValues = np.append(propertyValues, v, axis=1)
+					print(propertyValues.shape)
 
 		allDates = properties[0]['date']
 

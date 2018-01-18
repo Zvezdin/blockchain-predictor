@@ -14,7 +14,7 @@ class DatasetModel(abc.ABC):
 			self.requires = []
 
 	@abc.abstractmethod
-	def generate(self, properties, args):
+	def generate(self, properties, targets, args):
 		"""Generates a dataset using the properties provided"""
 
 	@staticmethod

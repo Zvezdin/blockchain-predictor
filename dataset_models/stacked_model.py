@@ -12,7 +12,7 @@ class StackedModel(DatasetModel):
 		self.name = "stacked"
 		self.requires = []
 
-	def generate(self, properties, args={}):
+	def generate(self, properties, targets, args={}):
 		if not properties:
 			return (None, None, None)
 
@@ -21,12 +21,10 @@ class StackedModel(DatasetModel):
 		args.setdefault('normalize', True)
 		args.setdefault('normalizationLevel', 'pixel') #'property', 'pixel', 'local'
 		args.setdefault('normalizationStd', 'global') #'local', 'global'
-		args.setdefault('target', ['highPrice_10max'])
 		args.setdefault('localNormalize', [None])
 		args.setdefault('defaultNormalization', 'basic')
 		args.setdefault('normalization', {'propertyName': 'normalizationAlgorithm'})
 		args.setdefault('binary', False)
-		args.setdefault('blacklistTarget', True)
 		args.setdefault('invert', False)
 
 		args.setdefault('width', 24)
@@ -41,86 +39,85 @@ class StackedModel(DatasetModel):
 		currentCol = 0
 		usedSpace = np.zeros((args['width'], args['height']), dtype=bool)
 
-		for i in range(0, len(properties)):
-			prop = properties[i].drop('date', axis=1)
+		for dataType, inputData in [('property', properties), ('target', targets)]:
+			for i, prop in enumerate(inputData):
+				prop = properties[i].drop('date', axis=1)
 
-			if len(prop.columns) != 1:
-				raise ValueError("The received property contains more than one data column!", prop.columns)
-			propName = prop.columns[0]
+				if len(prop.columns) != 1:
+					raise ValueError("The received property contains more than one data column!", prop.columns)
+				propName = prop.columns[0]
 
-			print("Processing property %s." % propName)
+				print("Processing property %s." % propName)
 
-			v = prop.values.swapaxes(0, 1)[0, :] #single list of the property values.
+				v = prop.values.swapaxes(0, 1)[0, :] #single list of the property values.
 
-			if debug: print("Debug", v.shape)
+				if debug: print("Debug", v.shape)
 
-			if type(v[0]) == np.ndarray: #Convert everything into a large np array
-				v = np.array([x for x in v]) #currently, v is a np array of np arrays. This is to force everything to one large ndarray
-				v = v.swapaxes(1, 2) # swap the prop value count with the width.
+				if type(v[0]) == np.ndarray: #Convert everything into a large np array
+					v = np.array([x for x in v]) #currently, v is a np array of np arrays. This is to force everything to one large ndarray
+					v = v.swapaxes(1, 2) # swap the prop value count with the width.
 
-			if len(v.shape) == 1: #if it is a single value property. make it 3d
-				v = np.reshape(v, (v.shape[0], 1, 1))
+				if len(v.shape) == 1: #if it is a single value property. make it 3d
+					v = np.reshape(v, (v.shape[0], 1, 1))
 
-			if debug: print("Debug v2", v.shape)
+				if debug: print("Debug v2", v.shape)
 
-			norm = None
+				norm = None
 
-			#we have the property values. Normalize or not.
-			if args['normalize'] and args['normalizationLevel'] == 'property':
-				normalization = args['normalization'].get(propName, args['defaultNormalization'])
-				if propName not in args['localNormalize']: #local normalization happens via another way
-					print("Globally normalizing property %s with method %s." % (propName, normalization))
-					norm = self.normalize(v, normalization)
-					v = norm.transform(v)
+				#we have the property values. Normalize or not.
+				if args['normalize'] and args['normalizationLevel'] == 'property':
+					normalization = args['normalization'].get(propName, args['defaultNormalization'])
+					if propName not in args['localNormalize']: #local normalization happens via another way
+						print("Globally normalizing property %s with method %s." % (propName, normalization))
+						norm = self.normalize(v, normalization)
+						v = norm.transform(v)
 
-			if args['binary']:
-				print("Converting data to binary! May cause issues.")
-				v = self.conver_to_binary(v)
+				if args['binary']:
+					print("Converting data to binary! May cause issues.")
+					v = self.conver_to_binary(v)
 
-			#add to our target
-			if propName in args['target']:
-				if not (norm is None and args['normalize']):
-					targetNorms.append(norm) #save the normalization for later conversion
-				
-				flattened = v.flatten(order='C') #the outputs cannot be spatial
-				flattened = flattened.reshape((flattened.shape[0], 1))
-				if targetData is None:
-					targetData = flattened
-				else:
-					targetData = np.append(flattened, v, axis=1)
-
-				if args['blacklistTarget']:
-					continue #skip the property
-
-			placed = False
-
-			while not placed:
-				if v.shape[1] > propertyValues.shape[1]: #not possible to fit
-					raise ValueError("Cannot fit property with width %d into space with width %d!" % (v.shape[1], propertyValues.shape[1]))
-
-				if currentRow + v.shape[1] > propertyValues.shape[1]: #can't fit horizontally
-					currentRow = 0
-					currentCol += 1 #break on new line. Should fit now.
-
-					if debug: print("Property couldn't fit horizontally, went on a new row")
-
-				while currentCol + v.shape[2] > propertyValues.shape[2]: #it can't fit vertically, resize it
-					if not args['flexible']:
-						raise ValueError("Cannot fit property with at column #%d with height %d into space with height %d!" % (currentCol, v.shape[2], propertyValues.shape[2]))
+				#add to our target
+				if dataType == 'target':
+					if not (norm is None and args['normalize']):
+						targetNorms.append(norm) #save the normalization for later conversion
+					
+					flattened = v.flatten(order='C') #the outputs cannot be spatial
+					flattened = flattened.reshape((flattened.shape[0], 1))
+					if targetData is None:
+						targetData = flattened
 					else:
-						propertyValues = self.appendColumn3d(propertyValues)
-						usedSpace = self.appendColumn2d(usedSpace)
-						if debug: print("Property couldn't fit vertically, added a column")
+						targetData = np.append(flattened, v, axis=1)
 
-				if not self.canPlacePropertyInSpace(propertyValues, v, usedSpace, currentRow, currentCol): #just can't fit
-					currentRow += 1 #the space is used, move up a row
-					if debug: print("Space for property is used, moved up a row")
-				else:
-					self.placePropertyInSpace(propertyValues, v, usedSpace, currentRow, currentCol)
-					if debug:
-						print("Placed property %s with shape %s at [%d,%d]" % (propName, str(v.shape), currentRow, currentCol))
-						print(usedSpace)
-					placed = True
+				if dataType == 'property':
+					placed = False
+
+					while not placed:
+						if v.shape[1] > propertyValues.shape[1]: #not possible to fit
+							raise ValueError("Cannot fit property with width %d into space with width %d!" % (v.shape[1], propertyValues.shape[1]))
+
+						if currentRow + v.shape[1] > propertyValues.shape[1]: #can't fit horizontally
+							currentRow = 0
+							currentCol += 1 #break on new line. Should fit now.
+
+							if debug: print("Property couldn't fit horizontally, went on a new row")
+
+						while currentCol + v.shape[2] > propertyValues.shape[2]: #it can't fit vertically, resize it
+							if not args['flexible']:
+								raise ValueError("Cannot fit property with at column #%d with height %d into space with height %d!" % (currentCol, v.shape[2], propertyValues.shape[2]))
+							else:
+								propertyValues = self.appendColumn3d(propertyValues)
+								usedSpace = self.appendColumn2d(usedSpace)
+								if debug: print("Property couldn't fit vertically, added a column")
+
+						if not self.canPlacePropertyInSpace(propertyValues, v, usedSpace, currentRow, currentCol): #just can't fit
+							currentRow += 1 #the space is used, move up a row
+							if debug: print("Space for property is used, moved up a row")
+						else:
+							self.placePropertyInSpace(propertyValues, v, usedSpace, currentRow, currentCol)
+							if debug:
+								print("Placed property %s with shape %s at [%d,%d]" % (propName, str(v.shape), currentRow, currentCol))
+								print(usedSpace)
+							placed = True
 
 		allDates = properties[0]['date']
 
