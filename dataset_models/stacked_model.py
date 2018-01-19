@@ -12,6 +12,11 @@ class StackedModel(DatasetModel):
 		self.name = "stacked"
 		self.requires = []
 
+	def getPropertyShape(self, prop):
+		prop = prop.drop('date', axis=1).values[0, 0]
+
+		return prop.shape
+
 	def generate(self, properties, targets, args={}):
 		if not properties:
 			return (None, None, None)
@@ -27,9 +32,15 @@ class StackedModel(DatasetModel):
 		args.setdefault('binary', False)
 		args.setdefault('invert', False)
 
-		args.setdefault('width', 24)
+		args.setdefault('width', None)
 		args.setdefault('height', 1)
 		args.setdefault('flexible', True) #if the height of the image can be expanded if the chosen properties don't fit
+
+		args['width'] = None #DEBUG, TODO
+
+		if args['width'] is None: #set the global witdh to the widest property's width
+			widths = [self.getPropertyShape(x)[1] for x in properties]
+			args['width'] = max(widths)
 
 		propertyValues = np.ndarray((properties[0].shape[0], args['width'], args['height']))
 		targetData = None
@@ -41,13 +52,13 @@ class StackedModel(DatasetModel):
 
 		for dataType, inputData in [('property', properties), ('target', targets)]:
 			for i, prop in enumerate(inputData):
-				prop = properties[i].drop('date', axis=1)
+				prop = prop.drop('date', axis=1)
 
 				if len(prop.columns) != 1:
 					raise ValueError("The received property contains more than one data column!", prop.columns)
 				propName = prop.columns[0]
 
-				print("Processing property %s." % propName)
+				print("Processing property %s which is %s." % (propName, dataType))
 
 				v = prop.values.swapaxes(0, 1)[0, :] #single list of the property values.
 
@@ -80,7 +91,7 @@ class StackedModel(DatasetModel):
 				if dataType == 'target':
 					if not (norm is None and args['normalize']):
 						targetNorms.append(norm) #save the normalization for later conversion
-					
+
 					flattened = v.flatten(order='C') #the outputs cannot be spatial
 					flattened = flattened.reshape((flattened.shape[0], 1))
 					if targetData is None:
@@ -107,7 +118,7 @@ class StackedModel(DatasetModel):
 							else:
 								propertyValues = self.appendColumn3d(propertyValues)
 								usedSpace = self.appendColumn2d(usedSpace)
-								if debug: print("Property couldn't fit vertically, added a column")
+								if debug: print("Property couldn't fit vertically, added a column. New shapes are %s prop values and %s used space." % (str(propertyValues.shape), str(usedSpace.shape)))
 
 						if not self.canPlacePropertyInSpace(propertyValues, v, usedSpace, currentRow, currentCol): #just can't fit
 							currentRow += 1 #the space is used, move up a row
