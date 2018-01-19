@@ -36,8 +36,6 @@ class StackedModel(DatasetModel):
 		args.setdefault('height', 1)
 		args.setdefault('flexible', True) #if the height of the image can be expanded if the chosen properties don't fit
 
-		args['width'] = None #DEBUG, TODO
-
 		if args['width'] is None: #set the global witdh to the widest property's width
 			widths = [self.getPropertyShape(x)[1] for x in properties]
 			args['width'] = max(widths)
