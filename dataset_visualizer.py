@@ -1,7 +1,7 @@
 import pickle
 import argparse
 import dateutil.parser
-import os
+import os, sys
 import os.path
 import time
 
@@ -11,6 +11,11 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+
+sys.path.insert(0, os.path.realpath('dataset_models')) #needed to load recent datasets
+from imageNormalizer import ImageNormalizer
+from basicNormalizer import BasicNormalizer
+from aroundZeroNormalizer import AroundZeroNormalizer
 
 import database_tools as db
 
@@ -72,17 +77,19 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('data', type=str, help='The data to visualize. Can be a filepath to a pickled (single!) dataset or a key in the db.')
 	parser.add_argument('--type', type=str, default='file', choices=['key', 'file'], help='What type of data to load and visualize- key from the database or a file.')
 	parser.add_argument('--index', type=int, default=0, help='If loading a file, provide the index of the property in the data matrix to be visualized.')
+	parser.add_argument('--target', dest='target', action="store_true", help='If visualizing a file, whether or not to visualize the prediction target.')
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--frame', dest='frame', action='store_true', help='Display single frame values')
 	parser.add_argument('--trim', dest='trim', action='store_true', help='A frame can be trimmed from values on Y=0 and X=end.')
 	parser.add_argument('--log2', dest='log2', action='store_true', help='Scale all account counts by a log2.')
 	parser.add_argument('--hbar', dest='hbar', action='store_true', help='Position the colorbar horisontally.')
-	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as images in the specified director.')
+	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as images in the specified directory.')
 	parser.set_defaults(frame=False)
 	parser.set_defaults(trim=False)
 	parser.set_defaults(log2=False)
 	parser.set_defaults(hbar=False)
+	parser.set_defaults(target=False)
 
 	args, _ = parser.parse_known_args()
 
@@ -114,6 +121,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					print(dataset['dates'][-1])
 
 					plotImage(frame)
+					if args.target:
+						plot(dataset['labels'], dataset['dates'], 'Correct labels')
 	elif args.type=='key':
 		prop = args.data
 
