@@ -82,19 +82,29 @@ def sortResults(results, ascending=True, index=-1, func=None):
 
 	return sorted(results, key=functools.cmp_to_key(compare)) #convert to python's current format
 
+def basename(f):
+	return os.path.split(f)[-1]
+
+def getCompareFuncBasedOnKey(key):
+	if key == 'val_loss' or key == 'loss' or key == 'rmse' or key == 'custom':
+		return min
+	elif key == 'R2' or key == 'sign':
+		return max
 
 def init():
 	np.set_printoptions(precision=3, linewidth=180)
 
 	parser = argparse.ArgumentParser(description="Tool that can read historical data from the db or from a file and visualize it as a graph.")
 	parser.add_argument('data', type=str, nargs='*', help='A pickled file or file list, output from training.')
-	parser.add_argument('--key', type=str, default=None, help='Display a specific score.')
+	parser.add_argument('--keys', type=str, default=None, help='Filter out only one or multiple keys, separated by a comma.')
 	parser.add_argument('--best', type=int, default=None, help='Only display the best N results.')
+	parser.add_argument('--detail', dest='detail', action='store_true', help='Display the scores in detail.')
+	parser.set_defaults(detail=False)
+	parser.add_argument('--no-display', dest='display', action='store_false', help='Do not plot any graphs.')
+	parser.set_defaults(display=True)
 	args, _ = parser.parse_known_args()
 
 	files = args.data
-
-	print(files)
 
 	histories = []
 
@@ -102,36 +112,70 @@ def init():
 
 	titles = files.copy()
 
+	keys = args.keys.split(',') if args.keys is not None else None
+
 	for f in files:
 		with open(f, 'rb') as fi:
-			hist = pickle.load(fi)['history']
+			element = pickle.load(fi)
+			hist = element['history']
 			histories.append(hist)
 
 	for i, hist in enumerate(histories):
-		if args.key is not None:
-			hist = {args.key: hist[args.key]}
-		
+		if keys is not None:
+			hist2 = {}
+			for key in keys:
+				hist2[key] = hist[key]
+			hist = hist2
+
 		for key in hist:
 			if key not in data:
 				data[key] = []
-			data[key].append({'file': files[i], 'data': hist[key]})
+			filename = basename(files[i]) #extract filename from path
+			data[key].append({'file': filename, 'data': hist[key]})
 
 	for key in data:
 		if key == 'val_loss' or key == 'loss' or key == 'rmse' or key == 'custom':
-			data[key] = sortResults(data[key], ascending=True)
+			func = min
+			data[key] = sortResults(data[key], ascending=True, func=func)
 		elif key == 'R2' or key == 'sign':
-			data[key] = sortResults(data[key], ascending=False)
+			func = max
+			data[key] = sortResults(data[key], ascending=False, func=func)
 		else:
 			raise ValueError("Unexpected and unknown metric '%s'." % key)
 		print("Best for %s: are as follows" % (key))
-		for i in range(5):
-			print("#%d %s is %f at %s" % (i+1, key, data[key][i]['data'][-1], data[key][i]['file']))
+		for i in range(min(5, len(data[key]))):
+			val = data[key][i]['data'][-1] if func is None else func(data[key][i]['data'])
+			print("#%d %s is %f at %s" % (i+1, key, val, data[key][i]['file']))
 
 		if args.best is not None:
 			data[key] = data[key][:args.best]
 
+	if args.detail:
+		resLines = ""
+		joiner = ' & '
+		for i, hist in enumerate(histories):
+			print("Detailed results for %s." % (basename(files[i])))
+			best = []
+			headers = []
 
-	drawAccuracyGraph(data)
+			for key in (hist if keys is None else keys):
+				best.append(getCompareFuncBasedOnKey(key)(hist[key]))
+				headers.append(key)
+			
+			print(headers)
+			print(best)
+
+			resLine = str.join(joiner, ("%f" % val for val in best)) + '\\\\\n'
+
+			resLines += resLine
+
+			print(str.join(joiner, headers))
+			print(resLine)
+		print("All result lines for conveninece:")
+		print(resLines)
+
+	if args.display:
+		drawAccuracyGraph(data)
 
 	#plt.title('Comparison of training progress')
 	#plt.legend(loc='upper left')
