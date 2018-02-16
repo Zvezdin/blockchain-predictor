@@ -10,7 +10,7 @@ data/
 c++/build/
 c++/test*
 debug/*
-paper/*
+paper/project/
 temp.py
 
 .vscode/
@@ -30,6 +30,5 @@ results/*
 *model.png
 debug.txt
 materials/
-*paper.pdf
 readme.pdf
 debug*.txt
