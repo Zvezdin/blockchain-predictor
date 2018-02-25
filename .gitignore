@@ -13,6 +13,17 @@ debug/*
 paper/project/
 temp.py
 
+todo.txt
+results/*
+*model.png
+debug.txt
+materials/*
+readme.pdf
+debug*.txt
+
+!materials/distributions/
+
+#IDE and Python files
 .vscode/
 .node-xmlhttprequest-sync-*
 json
@@ -23,12 +34,3 @@ time
 pd
 __pycache__/
 .cache/
-
-#others
-todo.txt
-results/*
-*model.png
-debug.txt
-materials/
-readme.pdf
-debug*.txt
