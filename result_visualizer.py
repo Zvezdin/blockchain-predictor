@@ -106,6 +106,16 @@ def init():
 
 	files = args.data
 
+	for i in range(len(files)):
+		if '\n' in files[i]:
+			s = files[i].split('\n')
+			subfiles = [f for f in s if f != '' and not f.isspace()]
+			files[i] = None
+			files.extend(subfiles)
+	files = [f for f in files if f is not None]
+	
+	#print(files)
+	
 	histories = []
 
 	data = {}
@@ -165,8 +175,11 @@ def init():
 			print(headers)
 			print(best)
 
+			commLine = '%' + basename(files[i]) + '\n'
+
 			resLine = str.join(joiner, ("%f" % val for val in best)) + '\\\\\n'
 
+			resLines += commLine
 			resLines += resLine
 
 			print(str.join(joiner, headers))
