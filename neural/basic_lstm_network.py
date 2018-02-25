@@ -71,22 +71,38 @@ class BasicLSTMNetwork(NeuralNetwork):
 		for arr in [args['LSTM'], args['dense']]:
 			while 0 in arr: arr.remove(0)
 
-		self.model = Sequential()
+		oldModel = True
 
-		for i, layer in enumerate(args['LSTM']):
-			ret_seq=(i< (len(args['LSTM'])-1))
-			name = str(layer)+ '_' + str(i+1) + ('_ret_seq' if ret_seq else '')
-			if i==0:
-				self.model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features), name=name ) )
-				self.model.add(Dropout(0.1, name='0.1'))
-			else:
-				self.model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], name=name) )
-			#model.add(Activation('relu'))
-			print("Adding LSTM Layer of size %d." % layer)
+		if oldModel:
+			self.model = Sequential()
+			for i, layer in enumerate(args['LSTM']):
+				ret_seq=(i< (len(args['LSTM'])-1))
+				name = str(layer)+ '_' + str(i+1) + ('_ret_seq' if ret_seq else '')
+				if i==0:
+					self.model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], batch_input_shape=(args['batch'], time_steps, features), name=name ) )
+					self.model.add(Dropout(0.1, name='0.1'))
+				else:
+					self.model.add(LSTM(layer, return_sequences=ret_seq, stateful=args['stateful'], name=name) )
+				#model.add(Activation('relu'))
+				print("Adding LSTM Layer of size %d." % layer)
+			for dense in args['dense']:
+				self.model.add(Dense(dense))
+				#model.add(Activation('relu'))
+		else:
+			dropout_value = 0.2
 
-		for dense in args['dense']:
-			self.model.add(Dense(dense))
-			#model.add(Activation('relu'))
+			self.model = Sequential()
+
+			#First recurrent layer with dropout
+			self.model.add(Bidirectional(LSTM(time_steps, return_sequences=True), input_shape=(time_steps, features),))
+			self.model.add(Dropout(dropout_value))
+
+			#Second recurrent layer with dropout
+			self.model.add(Bidirectional(LSTM((time_steps*2), return_sequences=True)))
+			self.model.add(Dropout(dropout_value))
+
+			#Third recurrent layer
+			self.model.add(Bidirectional(LSTM(time_steps, return_sequences=False)))
 
 		self.model.add(Dense(numTargets, name=str(numTargets)))
 		self.model.add(Activation('linear', name='linear'))
@@ -146,8 +162,14 @@ class BasicLSTMNetwork(NeuralNetwork):
 	def predict(self, dataset):
 		dataset, _ = self.reformat(dataset, None, cut_timesteps=self.cut_timesteps)
 
-		return self.model.predict(dataset, batch_size=self.batch_size)
+		return self.model.predict(dataset, batch_size=self.getBatchSize())
 
 	def evaluate(self, dataset, labels):
 		_, labels = self.reformat(dataset, labels, cut_timesteps=self.cut_timesteps) #don't reformat the dataset, predict() will reformat it
 		return self.scorePrediction(self.predict(dataset), labels)
+
+	def getBatchSize(self):
+		if self.batch_size is None:
+			self.batch_size = self.model.input_shape[0]
+
+		return self.batch_size
