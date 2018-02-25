@@ -18,7 +18,7 @@ class CustomDeepNetwork(NeuralNetwork):
 
 		for kind in ['train', 'valid', 'test']:
 			print("Reformatting dataset with shape", givenDataset[kind].shape)
-			dataset[kind], labels[kind] = self.reformat(givenDataset[kind], givenLabels[kind], image_width, image_height, num_labels)
+			dataset[kind], labels[kind] = self.labelsReformat(givenDataset[kind], givenLabels[kind], image_width, image_height, num_labels)
 			print(kind, 'set', dataset[kind].shape, labels[kind].shape)
 			print("Labels", givenLabels[kind][:5], labels[kind][:5])
 			print("Neg: %.1f%%" % (100.0 - 100.0 * np.sum(givenLabels[kind]) / len(givenLabels[kind])) )
