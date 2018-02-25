@@ -8,7 +8,7 @@ import pickle
 
 import numpy as np
 import matplotlib as mpl
-mpl.use('Agg') #for use without X server. Disable if needed
+#mpl.use('Agg') #for use without X server. Disable if needed
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
@@ -36,9 +36,9 @@ def randomizeDataset(dataset, labels, dates):
 	shuffled_dates = dates[permutation]
 	return shuffled_dataset, shuffled_labels, shuffled_dates
 
-def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet=False, shuffle=True, trim=False, noReplace=False):
-
+def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet=False, shuffle=True, trim=False, train=True):
 	#load the datasets
+	print("Loading dataset %s." % datasetFile)
 	rawDataset = loadDataset(datasetFile)
 
 	dataset = {}
@@ -83,20 +83,21 @@ def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet
 	for model in selectedModels:
 		if loadModel:
 			model.load(loadModel)
-		history[model.name] = model.train(dataset, labels, modelArgs, targetNormalization = normalization['train'])
+		if train:
+			history[model.name] = model.train(dataset, labels, modelArgs, targetNormalization = normalization['train'])
 
-		print(history[model.name])
+			print(history[model.name])
 
-		if saveModel is not None:
-			model.save(saveModel+modelExtension)
-			with open(saveModel+historyExtension, 'wb') as f:
-				data = {}
-				data['history'] = history[model.name]
-				data['model'] = model.name
-				data['dataset'] = datasetFile
-				data['args'] = modelArgs
+			if saveModel is not None:
+				model.save(saveModel+modelExtension)
+				with open(saveModel+historyExtension, 'wb') as f:
+					data = {}
+					data['history'] = history[model.name]
+					data['model'] = model.name
+					data['dataset'] = datasetFile
+					data['args'] = modelArgs
 
-				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+					pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
 	if not quiet:
 		print("Trained the networks.")
@@ -122,7 +123,8 @@ def run(datasetFile, models, modelArgs={}, saveModel=None, loadModel=None, quiet
 
 		if saveModel is not None:
 			filename = saveModel+graphExtension
-		drawAccuracyGraph(model.name, datesList, predictions, actuals, history=history[model.name], filename=filename)
+		hist = history.get(model.name, None)
+		drawAccuracyGraph(model.name, datesList, predictions, actuals, history=hist, filename=filename)
 	print("Used dataset %s and arguments %s" % (datasetFile, modelArgs))
 
 def simulateTrading(prediction, actual, startBalance):
@@ -220,12 +222,14 @@ def init():
 	parser.set_defaults(trim=False)
 	parser.add_argument('--no-replace', dest='noReplace', action="store_true", help="If a model is already saved with the same filename, don't train and save the new model.")
 	parser.set_defaults(noReplace=False)
+	parser.add_argument('--no-train', dest='train', action="store_false", help="Do not train, only evaluathe the model.")
+	parser.set_defaults(train=True)
 
 	args, _ = parser.parse_known_args()
 
 	if args.noReplace and args.saveModel is not None:
 		if os.path.exists(args.saveModel+modelExtension):
-			print("The file already exists and the 'noReplace' flag is used.")
+			print("The file already exists and the 'no-replace' flag is used.")
 			return #do not replace it
 
 	givenModels = [x.lower() for x in args.models.split(',')] if args.models else None
@@ -247,7 +251,7 @@ def init():
 
 	print("Processed model arguments", modelArgs)
 
-	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim, noReplace=args.noReplace)
+	run(args.dataset, givenModels, modelArgs=modelArgs, quiet=args.quiet, saveModel=args.saveModel, loadModel=args.loadModel, shuffle=args.shuffle, trim=args.trim, train=args.train)
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	init()
