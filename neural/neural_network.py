@@ -79,6 +79,7 @@ class NeuralNetwork(abc.ABC):
 		relative_zero = 0.0 #constant, depends on the dataset type and cannot be easily retrieved
 
 		correct_signs = 0.0
+		total_signs = len(labels)
 		absolutePrices = True
 
 		if len(labels[labels<0]) > 0: #if there are negative values
@@ -88,18 +89,20 @@ class NeuralNetwork(abc.ABC):
 
 		for i in range(len(labels)):
 			if not absolutePrices:
-				if (labels[i] >= relative_zero and prediction[i] >= relative_zero) or (labels[i] < relative_zero and prediction[i] < relative_zero):
+				if labels[i] == relative_zero and prediction[i] == relative_zero:
+					total_signs -= 1 #do not count a sign if nothing has changed overall
+				elif (labels[i] >= relative_zero and prediction[i] >= relative_zero) or (labels[i] < relative_zero and prediction[i] < relative_zero):
 					correct_signs += 1
 			else:
 				if i == 0:
 					continue
 				else:
 					if np.isclose(labels[i] - labels[i-1], 0) and np.isclose(prediction[i] - prediction[i-1], 0): #the case of zero difference
-						correct_signs += 1
+						total_signs += 1
 					elif (labels[i] - labels[i-1]) * (prediction[i] - prediction[i-1]) > 0: #if the sign of the change is the same
 						correct_signs += 1
 		
-		correct_signs /= len(labels)
+		correct_signs /= total_signs
 
 		return correct_signs
 
@@ -192,4 +195,7 @@ class NeuralNetwork(abc.ABC):
 	
 	@staticmethod
 	def loadModelKeras(filepath):
-		return load_model(filepath)
+		try:
+			return load_model(filepath)
+		except OSError:
+			return load_model(filepath+'.h5')
