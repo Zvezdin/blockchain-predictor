@@ -3,48 +3,87 @@ import os.path
 from datetime import datetime as dt
 
 import dataset_generator as gen
+import database_tools as db
+
+def getShapeOfKey(key):
+	ch = db.getChunkstore()
+	data = db.getLatestRow(ch, key)
+
+	data[key] = data[key].apply(db.decodeObject) #decode it because we encode numpy arrays
+
+	val = data[key].values[-1] #get the latest item
+
+	return val.shape
+
+def propToStr(props):
+	if type(props) != str:
+		return str.join(',', props)
+	return props
 
 def run(group, folder):
+	print(
+	getShapeOfKey('balanceLastSeenDistribution_cpp_log2')
+	)
+
 	directory = os.path.join(folder, group)
 
 	if group == 'distributions':
 
-		widths = [24, 24, 18, 23, 92, 92, 68, 88,48]
-		slices = {3: [':', ':'], 7: [':', ':']} #accBalDistr doesn't need a cutoff
+		widths = {}
+		slices = {}
+		slices['accountBalanceDistribution'] = [':', ':'] #these distributions don't need cutoff
+		slices['accountBalanceDistribution_log1_2'] = [':', ':']
+
 		distributions1 = ['balanceLastSeenDistribution_cpp_log2', 'contractBalanceLastSeenDistribution_log2_v2', 'contractVolumeInERC20Distribution_log2_v2_stateless', 'accountBalanceDistribution']
 
 		distributions2 =['balanceLastSeenDistribution_log1_2', 'contractBalanceLastSeenDistribution_log1_2_v2', 'contractVolumeInERC20Distribution_log1_2_v2_stateless', 'accountBalanceDistribution_log1_2']
-		basicProperties = ['highPrice,volumeFrom,volumeTo', 'highPrice_rel,volumeFrom_rel,volumeTo_rel', 'volumeFrom,volumeTo', 'volumeFrom_rel,volumeTo_rel']
+		basicProperties = ['highPrice,volumeFrom,volumeTo'.split(','), 'highPrice_rel,volumeFrom_rel,volumeTo_rel'.split(','), 'volumeFrom,volumeTo'.split(','), 'volumeFrom_rel,volumeTo_rel'.split(',')]
 		distributions = []
-		distributions.extend(basicProperties)
 		distributions.extend(distributions1)
 		#distributions.extend(distributions2)
-		distributions.append(str.join(',', distributions1)) #append all other distributions, concatenated into a string
-		#distributions.append(str.join(',', distributions2)) these distributions are too memory-heavy
+
+		#custom width for that element
+		widths[propToStr(distributions1)] = 48
+		distributions.append(distributions1) #append all other distributions, concatenated into a string
+		#distributions.append(distributions2) these distributions are too memory-heavy
+		distributions.extend(basicProperties)
+		distributions.extend([[x, 'highPrice', 'volumeFrom', 'volumeTo'] for x in distributions1])
 
 		for i, distribution in enumerate(distributions):
-			for target in ['highPrice_rel', 'highPrice_10max_rel', 'highPrice', 'highPrice_10max', 'uniqueAccounts', 'uniqueAccounts_rel']:
+			distributionStr = propToStr(distribution)
+			for target in ['highPrice_ema', 'highPrice_ema_rel', 'highPrice_sma', 'highPrice_sma_rel', 'highPrice_rel', 'highPrice_10max_rel', 'highPrice', 'highPrice_10max', 'uniqueAccounts', 'uniqueAccounts_rel']:
 				for model in ['stacked']:#, 'matrix']:
-					if 'volumeTo' in distribution: #it is a basic property
+					if 'volumeTo' in distributionStr or distributionStr == 'accountBalanceDistribution' or distributionStr == 'accountBalanceDistribution_log1_2': #it is a basic property
 						model = 'matrix'
 					for normalizationLevel in ['property', 'pixel']:#, 'local']:
 						for window in [8, 24, 104]:
-							if 'distribution' in distribution.lower() and model == 'matrix' and window > 24:
+							if 'distribution' in distributionStr.lower() and model == 'matrix' and window > 24:
 								continue #bad combination
 
-							filename = model + '-' + distribution + '-' + target + '-' + normalizationLevel + '-' + str(window)+'w' + '.pickle'
+							filename = model + '-' + distributionStr + '-' + target + '-' + normalizationLevel + '-' + str(window)+'w' + '.pickle'
 							filename = os.path.join(directory, filename)
 							if not os.path.exists(filename): #no need to waste writes if already written
 								print("Generating dataset %s." % filename)
-								if i < len(widths):
-									width = widths[i]
-								else:
-									width = None
 
-								gen.run(model, distribution.split(','), target.split(','), filename, start=dt(2017,3,1), end=None, ratio=[1,6,1], shuffle=False,\
+								width = widths.get(distributionStr, None)
+
+								preprocess={}
+
+								if 'distribution' in distributionStr: #do not preprocess simple vlaues
+									if type(distribution) == list:
+										for distr in distribution:
+											slice_ = slices.get(distr, [':', '1:'])
+											preprocessElement = {'scale': 'log2', 'slices': slice_}
+											preprocess[distr] = preprocessElement
+									else:
+										slice_ = slices.get(distribution, [':', '1:'])
+										preprocessElement = {'scale': 'log2', 'slices': slice_}
+										preprocess[distribution] = preprocessElement
+								
+								gen.run(model, distribution, target.split(','), filename, start=dt(2017,3,1), end=None, ratio=[1,6,1], shuffle=False,\
 								args={'window': window, 'normalization': {}, 'defaultNormalization': 'auto', 'blacklistTarget': True, 'width': width,\
 								'normalizationLevel': normalizationLevel, 'normalizationStd': 'global'},\
-								preprocess={distribution: {'scale': 'log2', 'slices': slices.get(i, [':', '1:'])}}) #last line will break if there is more than one distribution
+								preprocess=preprocess) #last line will break if there is more than one distribution
 	elif group == 'experiments':
 		args = []
 		args.append({'prop': '', 'target': 'highPrice_rel', 'blacklistTarget': False, 'preprocessor': {}})
