@@ -10,7 +10,7 @@ from Naked.toolshed.shell import execute_js, muterun_js
 
 import database_tools as db
 
-blockSeries = 200
+blockSeries = 10000
 attemptsThreshold = 10
 
 logsSeparate = False

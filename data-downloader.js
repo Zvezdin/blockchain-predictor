@@ -226,23 +226,24 @@ function getContractLogs(start, end){
 function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEmpty=true){
 	//TODO: If an error occurs, try to get it in smaller chunks
 	console.log("Getting all tx traces from "+start+" to "+end);
-	return new Promise(function(resolve, reject) {
+	return new Promise(async function(resolve, reject) {
 		var result = [];
 
 		var emptyRemovals = 0;
 		var errorRemovals = 0;
 
 		for(var offset=new big(0);; offset = offset.add(batchSize)){
-			var out = web3.currentProvider.send({
+			var params = {
 				method: "trace_filter",
 				params: [{fromBlock: "0x" + (+start).toString(16), toBlock: "0x" + (+end).toString(16), after: +offset.valueOf(), count: batchSize}],
 				jsonrpc: "2.0",
 				id: "1583"
-			});
+			};
+
+			//var out = web3.currentProvider.send(params);
+			var out = await web3CustomSend(params);
 
 			var rawResult = out.result;
-
-			console.log(out);
 
 			if(rawResult.length == 0){
 				//we're done here!
@@ -255,6 +256,7 @@ function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEm
 				var el = rawResult[i];
 
 				if(noErrors && el.error) {
+					//TODO: What about gas spendings and this depleting the account balance?
 					errorRemovals++;
 					continue;
 				}
