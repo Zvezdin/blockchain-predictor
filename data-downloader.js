@@ -5,6 +5,8 @@ const fs = require('fs');
 const Stopwatch = require("node-stopwatch").Stopwatch;
 const util = require('util')
 const assert = require('assert').strict;
+const ArgumentParser = require("argparse").ArgumentParser;
+const big = require("bignumber.js");
 
 const sw = Stopwatch.create();
 
@@ -13,8 +15,6 @@ var web3;
 var debug = true;
 
 var datadir = 'data/'
-
-var contractFile = datadir + 'contracts.json'
 
 const maxAsyncRequests = 8;
 
@@ -27,7 +27,7 @@ function initBlockchain(){
 	// set the provider from Web3.providers
 		console.log("Attempting connection to RPC...");
 		web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
-		if(typeof web3.isConnected !== "undefined" && web3.isConnected()) console.log("Successful connection!");
+		if(web3.isConnected()) console.log("Successful connection!");
 		else{
 			console.error("Unsuccessful connection!\nMake sure that you have a local node running and that RPC / web3 is enabled on it");
 			return false;
@@ -78,71 +78,66 @@ function downloadCourseCryptocompare(start, end, callback){
 
 	const firstTimestamp = 1438959600 //this timestamp is the first data that this source has
 
-	var sendRequest = function(stB){
-		var request = 'https://min-api.cryptocompare.com/data/histohour?fsym=ETH&tsym=USD&limit=2000&e=CCCAGG&toTs='+stB;
-		JSONRequest(request, function(part){
-			var partData = part.Data.reverse().filter(tick => tick.time >= firstTimestamp) //remove any invalid data that is before the first timestamps
-			data.push.apply(data, partData)
+	return new Promise(function(resolve, reject){
+		var sendRequest = function(stB){
+			var request = 'https://min-api.cryptocompare.com/data/histohour?fsym=ETH&tsym=USD&limit=2000&e=CCCAGG&toTs='+stB;
+			JSONRequest(request, function(part){
+				var partData = part.Data.reverse().filter(tick => tick.time >= firstTimestamp) //remove any invalid data that is before the first timestamps
+				data.push.apply(data, partData)
 
-			console.log(util.format("Received data chunk that starts at %d and ends at %d.", part.TimeTo, part.TimeFrom))
+				console.log(util.format("Received data chunk that starts at %d and ends at %d.", part.TimeTo, part.TimeFrom))
 
-			if(part.TimeFrom > start && part.TimeFrom > firstTimestamp)
-				sendRequest(part.TimeFrom-1) //request the next batch
-			else{
-				for(var i=0; i<data.length-1; i++){ //validate that we have all data in the correct hourly intervals
-					if (data[i].time - 3600 != data[i+1].time){
-						console.log(util.format("Mismatch between dates %d and %d with difference %d.", data[i].time, data[i+1].time, data[i+1].time-data[i].time))
+				if(part.TimeFrom > start && part.TimeFrom > firstTimestamp)
+					sendRequest(part.TimeFrom-1) //request the next batch
+				else{
+					for(var i=0; i<data.length-1; i++){ //validate that we have all data in the correct hourly intervals
+						if (data[i].time - 3600 != data[i+1].time){
+							console.log(util.format("Mismatch between dates %d and %d with difference %d.", data[i].time, data[i+1].time, data[i+1].time-data[i].time))
+						}
 					}
+
+					data.reverse()
+
+					resolve(data)
 				}
+			})
+		}
 
-				data.reverse()
-
-				callback(data)
-			}
-		})
-	}
-
-	sendRequest(end)
-}
-
-function downloadCoursePoloniex(start, end, callback){
-	var request = "https://poloniex.com/public?command=returnChartData&currencyPair=USDT_ETH&start="+start+"&end="+end+"&period=300"
-
-	JSONRequest(request, function(res){
-		callback(res)
+		sendRequest(end)
 	});
 }
 
-function downloadCourse(start, end, source, callback){
+function downloadCoursePoloniex(start, end){
+	var request = "https://poloniex.com/public?command=returnChartData&currencyPair=USDT_ETH&start="+start+"&end="+end+"&period=300"
 
+	return new Promise(function(resolve, reject){
+		JSONRequest(request, function(res){
+			resolve(res)
+		});
+	});
+}
+
+function downloadCourse(start, end, source){
 	var request = "";
 
-	var saveCallback = function(data){
-		if (data != undefined){
-			console.log(data.length, data[0], data[data.length-1])
-
-			saveJSON(data, datadir + source + "_price_data.json")
-		}
-
-		callback(data)
-	}
-
-	if(source == "poloniex"){
-		downloadCoursePoloniex(start, end, saveCallback)
-	}else if(source == "cryptocompare"){
-		downloadCourseCryptocompare(start, end, saveCallback)
-	} else callback(undefined)
+	return new Promise(function(resolve, reject){
+		if(source == "poloniex"){
+			downloadCoursePoloniex(start, end).then(res => {
+				resolve(res);
+			});
+		} else if(source == "cryptocompare"){
+			downloadCourseCryptocompare(start, end).then(res => {
+				resolve(res);
+			});
+		} else reject("Invalid source specified: "+source);
+	});
 }
 
 function downloadWholeCourse(){
-	downloadCourse(1, 999999999999999, "cryptocompare", function(result){
-		if(result == undefined){
-			console.error("Error while downloading course!")
-		}
-	});
+	return downloadCourse(1, 999999999999999, "cryptocompare");
 }
 
-function downloadBlockchain(startBlock, endBlock){
+function downloadBlocks(startBlock, endBlock){
 	var blockDict = {}; //temp storage for the received blocks
 
 	var requestedBlocks = 0; //the amount of blocks we have requested to receive
@@ -228,31 +223,41 @@ function getContractLogs(start, end){
 
 //returns a promise for all transaction traces for the block range [start, end]
 //requires the parity node to run! Only parity supports JSON RPC transaction tracing api!
-function getTransactionTraces(start, end, noErrors=true){
+function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEmpty=true){
+	//TODO: If an error occurs, try to get it in smaller chunks
 	console.log("Getting all tx traces from "+start+" to "+end);
 	return new Promise(function(resolve, reject) {
-		web3.currentProvider.sendAsync({
-			method: "trace_filter",
-			params: [{fromBlock: "0x" + (+start).toString(16), toBlock: "0x" + (+end).toString(16)}],
-			jsonrpc: "2.0",
-			id: "1583"
-		}, function (err, result) {
-			if(err){
-				reject(err);
-				return;
-			}
+		var result = [];
 
-			rawResult = result.result;
-			result = [];
+		var emptyRemovals = 0;
+		var errorRemovals = 0;
+
+		for(var offset=new big(0);; offset = offset.add(batchSize)){
+			var out = web3.currentProvider.send({
+				method: "trace_filter",
+				params: [{fromBlock: "0x" + (+start).toString(16), toBlock: "0x" + (+end).toString(16), after: +offset.valueOf(), count: batchSize}],
+				jsonrpc: "2.0",
+				id: "1583"
+			});
+
+			var rawResult = out.result;
+
+			console.log(out);
+
+			if(rawResult.length == 0){
+				//we're done here!
+				break;
+			}
+			
+			console.log("Received a batch of "+rawResult.length+" traces.");
 
 			for(var i=0; i<rawResult.length; i++) {
 				var el = rawResult[i];
 
 				if(noErrors && el.error) {
+					errorRemovals++;
 					continue;
 				}
-
-				result.push(el);
 		
 				if(el.type !== 'reward' && el.type !== 'call' && el.type !== 'create' && el.type !== 'suicide'){
 					console.log("Found something different!")
@@ -260,10 +265,46 @@ function getTransactionTraces(start, end, noErrors=true){
 				}
 
 				cleanAndNormalizeTrace(el);
+
+				if(noEmpty && el.value == '0x0' && el.gasUsed == '0x0') {
+					//Warning: There are transactions that use 0 gas and transfer 0 wei, but have provided gas.
+					//not sure if we should discard those or not. 
+					//they don't look like to change blockchain state though
+					if(el.gas != '0x0') {
+						console.log("Take a look at this strange trace:")
+						console.dir(el, {depth:null})
+					}
+					
+					emptyRemovals++;
+					continue;
+				}
+
+				result.push(el);
 			}
-			
-			console.log("Received traces with length "+result.length);
-			resolve(result);
+
+			if(rawResult.length < batchSize){
+				//this was the last batch of traces 
+				break;
+			}
+		
+		}
+
+		assert(result[0].blockNumber == start);
+		assert(result[result.length-1].blockNumber == end);
+
+		console.log("Received traces with length "+result.length+", excluding "+emptyRemovals+" empty traces and "+errorRemovals+" errored ones.");
+		resolve(result);
+	});
+}
+
+function web3CustomSend(params) {
+	return new Promise(function(resolve, reject){
+		web3.currentProvider.sendAsync(params, function(err, res){
+			if(err){
+				reject(err);
+			} else {
+				resolve(res);
+			}
 		});
 	});
 }
@@ -533,7 +574,7 @@ function copyDateFromBlocks(blocks, objects){
 	for(let j=1; j<arguments.length; j++){
 		let obj = arguments[j];
 		for(let i=0; i<obj.length; i++){
-			obj[i].date = blocks[obj[i].blockNumber].timestamp;
+			obj[i].date = blocks[obj[i].blockNumber].date;
 		}
 	}
 }
@@ -613,7 +654,7 @@ function structureBlockchainData(blockDict, logs, traces){
 	}
 
 	copyDateFromBlocks(blockDict, logs, traces, transactions);
-	
+
 	let blockList = dictToList(blockDict);
 	sortByField(blockList, 'date');
 	sortByField(logs, 'date');
@@ -624,7 +665,7 @@ function structureBlockchainData(blockDict, logs, traces){
 	console.log("Successfully loaded "+blockList.length+" blocks");
 	console.log("First block is "+blockList[0].number+" and last one is "+blockList[blockList.length-1].number);
 	
-	let blockchain = {logs: logs, traces: traces, blocks: blockList, transactions: transactions};
+	let blockchain = {log: logs, trace: traces, block: blockList, tx: transactions};
 
 	//remove if we don't have TXs
 	if(transactions.length == 0){
@@ -632,24 +673,6 @@ function structureBlockchainData(blockDict, logs, traces){
 	}
 	
 	return blockchain;
-}
-
-function saveAsJSON(data){
-	sw.start();
-
-	var file = JSON.stringify(data);
-	var filename = datadir+"blocks "+data['blocks'][0].number+"-"+data['blocks'][data['blocks'].length-1].number+".json";
-
-	fs.writeFile(filename, JSON.stringify(data), function(err) {
-		if(err) {
-			console.log(err);
-			sw.stop();
-			return;
-		}
-
-		console.log("The data was saved in "+sw.elapsed.seconds+"s as "+filename);
-	});
-	sw.stop();
 }
 
 //this function is to make quick functionality test - not to be confused with unit testing.
@@ -707,46 +730,88 @@ function testFilters(){
 	filter.get(handlerCB)
 }
 
-function printHelp(){
-	console.log("A tool to download cryptocurrency course and blockchain data and save them as a json");
-	console.log("Arguments:");
-	console.log("course - downloads the whole history of the token course from an exchange");
-	console.log("blockchain - downloads some blockchain data (transactions, balances, ect..) from a local node");
+async function saveBlockchain(start, end, filename) {
+	if(!initBlockchain()) return;
+
+	const tracesReq = getTransactionTraces(start, end);
+	const logsReq = getContractLogs(start, end);
+	const blocksReq = downloadBlocks(start, end);
+
+	const res = await Promise.all([blocksReq, logsReq, tracesReq]);
+
+	let blockchain = structureBlockchainData(res[0], res[1], res[2]);
+	
+	if(filename == null){
+		filename = datadir+"blocks "+blockchain['blocks'][0].number+"-"+blockchain['blocks'][blockchain['blocks'].length-1].number+".json";
+	}
+
+	saveJSON(blockchain, filename);
 }
 
-async function processArgs(){
-	if(process.argv.length == 2) printHelp();
-	else{
-		for(argIndex = 2; argIndex<process.argv.length; argIndex++){
-			arg = process.argv[argIndex];
+async function saveCourse(filename) {
+	let course = await downloadWholeCourse()
+	if(!filename){
+		filename = 'data/course.json';
+	}
 
-			if(arg.search('help') >=0) printHelp();
-			else if(arg == 'course') downloadWholeCourse();
-			else if(arg == 'blockchain'){
-				var start = parseInt(process.argv[argIndex+1]);
-				var end = parseInt(process.argv[argIndex+2]);
-				argIndex += 2;
-				if(isNaN(start) || isNaN(end)){
-					console.log("Enter the start block and block count to download.");
-					break;
-				}
+	saveJSON(course, filename);
+}
 
-				if(!initBlockchain()) return;
+function main() {
+	var parser = new ArgumentParser({
+		version: '0.1.0',
+		addHelp:true,
+		description: 'A tool to download cryptocurrency course and blockchain data and save them as a json'
+	});
 
-				const tracesReq = getTransactionTraces(start, end);
-				const logsReq = getContractLogs(start, end);
-				const blocksReq = downloadBlockchain(start, end);
+	parser.addArgument(
+		[ '--blockchain' ],
+		{
+			help: 'Download blockchain data with for a block range of given start and end block number',
+			nargs: 2,
+			defaultValue: false,
+			type: Number,
+		},
+	);
 
-				const res = await Promise.all([blocksReq, logsReq, tracesReq]);
+	parser.addArgument(
+		['--course'],
+		{
+			help: 'Downloads the whole history of the token course from an exchange',
+			defaultValue: false,
+			action: "storeTrue",
+		},
+	)
 
-				let blockchain = structureBlockchainData(res[0], res[1], res[2]);
-				saveAsJSON(blockchain);
-			}
-			else if(arg == 'test'){
-				testFilters()
-			}
+	parser.addArgument(
+		['--filename'],
+		{
+			help: 'Location to save downloaded data',
+			type: String,
+		},
+	)
+
+
+	var args = parser.parseArgs();
+
+	if(!args.course && !args.blockchain) {
+		console.error("Please choose an action! Run with '-h' for a help page.");
+		return;
+	}
+
+	if(args.course){
+		saveCourse(args.filename);
+	} else if (args.blockchain != null) {
+		let start = args.blockchain[0];
+		let end = args.blockchain[1];
+
+		if(isNaN(start) || isNaN(end)){
+			console.log("Enter the start block and block count to download.");
+			return;
 		}
+
+		saveBlockchain(start, end, args.filename);
 	}
 }
 
-processArgs();
+main();
