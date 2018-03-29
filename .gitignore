@@ -11,6 +11,7 @@ c++/build/
 c++/test*
 debug/*
 paper/project/
+paper_acm/*
 temp.py
 
 todo.txt
