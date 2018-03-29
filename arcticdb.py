@@ -1,29 +1,24 @@
-import sys
+""""Interface between the JS Download script and the Database storage"""
+
 import os
-from datetime import timezone, datetime as dt
+from datetime import datetime as dt
 import time
-import pickle
 import json
-from time import sleep
 import argparse
 
-import pandas as pd
 from Naked.toolshed.shell import execute_js, muterun_js
-from arctic import Arctic
-from arctic import TICK_STORE
-from arctic import CHUNK_STORE
-from arctic.date import DateRange
 
 import database_tools as db
 
-blockSeries = 10000
+blockSeries = 200
 attemptsThreshold = 10
 
 logsSeparate = False
 parseToInt = False
 
-priceDataFile = 'data/cryptocompare_price_data.json'
-dataDownloaderScript = '--max-old-space-size=4076 data-downloader.js'
+tempFilename = 'data/temp.json'
+
+dataDownloaderScript = '--max-old-space-size=32768 data-downloader.js'
 
 chunkStore = db.getChunkstore()
 
@@ -36,7 +31,7 @@ def loadRawData(filepath):
 			loadedData = json.load(json_data)
 			print("Loading the data took "+str(time.time() - start)+" seconds")
 			return loadedData
-	except:
+	except FileNotFoundError:
 		return None
 
 def convertTimestamp(x):
@@ -73,79 +68,78 @@ def parseInt(data):
 					pass
 
 def processRawCourseData(data):
-
 	start = time.time()
 	for x in data:
-
 		convertTimestamp(x)
-		#x['transactions'] = str(pickle.dumps( [ {'from': 0x1, 'to': 0x2, 'value': 3} for x in range(3) ] ) )
-	print("Processing the data took "+str(time.time() - start)+" seconds")
 
 
+def downloadCourse():
+	callDataDownloaderCourse(tempFilename)
 
-
-
-def downloadCourse(key):
-	callDataDownloaderCourse()
-
-	data = loadRawData(priceDataFile) #get it
+	data = loadRawData(tempFilename) #get it
+	os.remove(tempFilename)
 
 	print("Downloaded data with length "+str(len(data))+" ticks") #debug
 
 	processRawCourseData(data) #process a bit to make it suitable for storage
 
-	db.saveData(chunkStore, key, data, db.courseChunkSize) #save to db
+	db.saveData(chunkStore, db.dbKeys['tick'], data, db.courseChunkSize) #save to db
 
 
-def callDataDownloaderCourse():
-	success = execute_js(dataDownloaderScript, 'course')
-	if not success: print("Failed to execute js")
+def callDataDownloaderCourse(filename):
+	success = execute_js(dataDownloaderScript, '--course --filename '+filename)
+	if not success:
+		print("Failed to execute js")
 
-def callDataDownloaderBlockchain(start, count):
-	success = execute_js(dataDownloaderScript, 'blockchain '+str(start)+' '+str(count))
-	if not success: print("Failed to execute js")
+def callDataDownloaderBlockchain(start, count, filename):
+	success = execute_js(dataDownloaderScript, '--blockchain '+str(start)+' '+str(count)+' --filename '+filename)
+	if not success:
+		print("Failed to execute js")
 
-def downloadBlockchain(start = 0, targetBlock = None):
+def downloadBlockchain(start=0, targetBlock=None):
+	"""Calls the JS script to download a certain block range and saves the result in the DB"""
+
 	currentBlock = getLatestBlock()
 
-	if currentBlock < 0: currentBlock = start
-
-	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
-
+	if currentBlock < 0:
+		currentBlock = start
 
 	series = blockSeries
 
-	if targetBlock != None and series > targetBlock - currentBlock: series = targetBlock - currentBlock
+	if targetBlock is None:
+		targetBlock = 5300000 #TODO: Have automatic detection of latest block
+	if series > targetBlock - currentBlock:
+		series = targetBlock - currentBlock
+	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
 
 	attempts = 0
 
-	while currentBlock < (targetBlock if targetBlock != None else 4500000): #todo determine the end of the blockchain automatically
+	while currentBlock < targetBlock:
+		nextTargetBlock = currentBlock + series-1
 		print('Calling js to download '+str(series)+' blocks from '+str(currentBlock))
-		callDataDownloaderBlockchain(currentBlock, series)
-		filename = getBlockchainFile(currentBlock, currentBlock+series-1)
-		data = loadRawData(filename) #get it
+		callDataDownloaderBlockchain(currentBlock, nextTargetBlock, tempFilename)
 
-		if data == None:
-			print("Failed reading", filename, ", redownloading...")
+		data = loadRawData(tempFilename) #get it
+
+		if data is None:
+			print("Failed reading", tempFilename, ", redownloading...")
 			attempts += 1
 
-			if(attempts > attemptsThreshold):
+			if attempts > attemptsThreshold:
 				print("Too many failed attempts, aborting operation.")
 				return
 
-			sleep(30 * attempts) #delay before retrying. Most issues are solved that way.
+			time.sleep(30 * attempts) #delay before retrying. Most issues are solved that way.
 			continue
 
 		attempts = 0
-		os.remove(filename)
+		os.remove(tempFilename)
 
-		blocks, transactions, logs = processRawBlockchainData(data)
+		data = processRawBlockchainData(data)
 
-		if logsSeparate and len(logs) > 0:
-			db.saveData(chunkStore, db.dbKeys['logs'], logs, db.logsChunkSize) #save the logs
-		if len(transactions) > 0 :
-			db.saveData(chunkStore, db.dbKeys['tx'], transactions, db.txChunkSize) #save tx
-		db.saveData(chunkStore, db.dbKeys['block'], blocks, db.blockChunkSize) #save block data		
+		for key in data:
+			if data[key]:
+				db.saveData(chunkStore, db.dbKeys[key], data[key], db.chunkSizes[key]) #save in DB
 
 		currentBlock += series
 
@@ -153,48 +147,13 @@ def getBlockchainFile(arg1, arg2): #the resulting file from the download script 
 	return 'data/blocks '+str(arg1)+'-'+str(arg2)+'.json'
 
 def processRawBlockchainData(data):
-	transactions = []
-	logs = []
-	for block in data:
-		convertTimestamp(block) #transfer date string to date object, used to filter and manage the dt
-
-		for tx in block['transactions']:
-			tx['date'] = block['date']
-			
-			if 'logs' in tx:
-
-				if logsSeparate:
-					logSection = tx['logs']# list of logs for this transaction
-					tx.pop('logs', None)#remove it from the tx
-
-					for log in logSection:
-						topics = log['topics'] #let's unpack the topics list in different columns
-						log.pop('topics', None) #remove the list
-						for i in range(4): #in Ethereum, the topics can be maximum 4.
-							if i < len(topics):
-								log['topic'+str(i)] = topics[i]
-							else:
-								log['topic'+str(i)] = None
-						log['date'] = block['date']
-
-						if parseToInt:
-							parseInt(log)
-
-						logs.append(log)
-				else:
-					#workaround because Arctic is allergic to arrays
-					encoded = db.encodeObject(tx['logs'])
-					tx['logs'] = encoded
-
+	for key in data: #for each time series
+		for el in data[key]: #each element in the time series
+			convertTimestamp(el) #transfer UNIX timestamp to date object, used to filter and manage the DB
 			if parseToInt:
-				parseInt(tx)
-			transactions.append(tx)
+				parseInt(el)
 
-		block.pop('transactions', None) #remove the transactions from blockcdata - we work with them separately
-
-		if parseToInt:
-			parseInt(block)
-	return data, transactions, logs
+	return data
 
 def getLatestBlock():
 	try:
@@ -216,6 +175,6 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	args, _ = parser.parse_known_args()
 
-	if args.course: downloadCourse(db.dbKeys['tick'])
+	if args.course: downloadCourse()
 	if args.blockchain:
 		downloadBlockchain(args.start, args.end)
