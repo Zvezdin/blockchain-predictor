@@ -83,7 +83,7 @@ def downloadCourse():
 
 	processRawCourseData(data) #process a bit to make it suitable for storage
 
-	db.saveData(chunkStore, db.dbKeys['tick'], data, db.courseChunkSize) #save to db
+	db.saveData(chunkStore, db.dbKeys['tick'], data, db.chunkSizes['tick']) #save to db
 
 
 def callDataDownloaderCourse(filename):

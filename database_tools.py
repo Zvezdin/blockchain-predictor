@@ -11,19 +11,22 @@ from arctic import TICK_STORE
 from arctic import CHUNK_STORE
 from arctic.date import DateRange, CLOSED_CLOSED, CLOSED_OPEN, OPEN_CLOSED, OPEN_OPEN
 
-masterKey="_all_logs"
+masterKey=""
 
 #other keys include _all_logs and _all_receipts
 
-dbKeys = {'tick': '', 'tx': '', 'block': '', 'logs': ''}
+dbKeys = {'tick': '', 'tx': '', 'block': '', 'log': '', 'trace': ''}
+
+chunkSizes = {
+	'tick': 'M',
+	'tx': 'D',
+	'block': 'W',
+	'log': 'D',
+	'trace': 'D',
+}
 
 dontRemoveKeys = True
 
-blockChunkSize = 'W'
-txChunkSize = 'D'
-receiptChunkSize = 'D'
-courseChunkSize = 'M'
-logsChunkSize = 'D'
 
 storeKey = 'chunkstore'
 
