@@ -4,6 +4,7 @@
   "description": "A deep learning network that acceps processed blockchain data to predict the price of a given cryptocurrency",
   "main": "index.js",
   "dependencies": {
+    "argparse": "^1.0.10",
     "node-stopwatch": "0.0.1",
     "web3": "^0.20.6"
   },
