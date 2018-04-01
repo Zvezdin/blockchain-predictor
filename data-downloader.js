@@ -223,7 +223,7 @@ function getContractLogs(start, end){
 
 //returns a promise for all transaction traces for the block range [start, end]
 //requires the parity node to run! Only parity supports JSON RPC transaction tracing api!
-function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEmpty=true){
+function getTransactionTraces(start, end, batchSize=100000, noErrors=true, noEmpty=true){
 	//TODO: If an error occurs, try to get it in smaller chunks
 	console.log("Getting all tx traces from "+start+" to "+end);
 	return new Promise(async function(resolve, reject) {
@@ -231,6 +231,10 @@ function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEm
 
 		var emptyRemovals = 0;
 		var errorRemovals = 0;
+
+		//key -> value of failed transactions
+		//because in traces, only the first trace is errored
+		var failedTransactions = {};
 
 		for(var offset=new big(0);; offset = offset.add(batchSize)){
 			var params = {
@@ -255,12 +259,15 @@ function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEm
 			for(var i=0; i<rawResult.length; i++) {
 				var el = rawResult[i];
 
-				if(noErrors && el.error) {
-					//TODO: What about gas spendings and this depleting the account balance?
-					errorRemovals++;
-					continue;
+				if(noErrors) {
+					if(el.error || failedTransactions[el.transactionHash]) {
+						failedTransactions[el.transactionHash] = true;
+						//TODO: What about gas spendings and this depleting the account balance?
+						errorRemovals++;
+						continue;
+					}
 				}
-		
+
 				if(el.type !== 'reward' && el.type !== 'call' && el.type !== 'create' && el.type !== 'suicide'){
 					console.log("Found something different!")
 					console.dir(el, {depth:null})
@@ -268,14 +275,10 @@ function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEm
 
 				cleanAndNormalizeTrace(el);
 
-				if(noEmpty && el.value == '0x0' && el.gasUsed == '0x0') {
+				if(noEmpty && el.value == '0x0' && el.gasUsed == '0x0' && el.gas == '0x0') {
 					//Warning: There are transactions that use 0 gas and transfer 0 wei, but have provided gas.
 					//not sure if we should discard those or not. 
 					//they don't look like to change blockchain state though
-					if(el.gas != '0x0') {
-						console.log("Take a look at this strange trace:")
-						console.dir(el, {depth:null})
-					}
 					
 					emptyRemovals++;
 					continue;
@@ -291,7 +294,9 @@ function getTransactionTraces(start, end, batchSize=1000000, noErrors=true, noEm
 		
 		}
 
-		assert(result[0].blockNumber == start);
+		console.log(result[0], result[result.length-1]);
+
+		assert(start == 0 || result[0].blockNumber == start);
 		assert(result[result.length-1].blockNumber == end);
 
 		console.log("Received traces with length "+result.length+", excluding "+emptyRemovals+" empty traces and "+errorRemovals+" errored ones.");
