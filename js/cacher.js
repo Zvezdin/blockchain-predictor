@@ -32,11 +32,12 @@ module.exports = class Cacher {
 			this.updateNewFile(filename);
 
 			const res = await get.getAll(start, end);
+			
 			jsonUtil.save(res, path);
 		}
 	}
 
-	async cacheAll(series=50, end=5000000) {
+	async cacheAll(series=50, end=5000050) {
 		let startBlock = this.prevEnd+1;
 		
 		for(; startBlock <= end - series; startBlock += series){
@@ -124,7 +125,7 @@ module.exports = class Cacher {
 	}
 
 	loadFile(filename, start=undefined, end=undefined) {
-		let obj = jsonUtil.load(filename);
+		let obj = jsonUtil.load(this.folder + "/" + filename);
 
 		if(start || end){ //filter by given start or end
 			for(let key in obj) { //for each key ex. block, trace, log, ...
@@ -135,10 +136,11 @@ module.exports = class Cacher {
 							(start && arr[i]['blockNumber'] < start) ||
 							(end && arr[i]['blockNumber'] > end)
 						) {
-							delete arr[i];
+							arr.splice(i, 1);
+							i--;
 						}
 					}
-
+					
 					if(start) {
 						assert(arr[0]['blockNumber'] == start);
 					}
@@ -187,11 +189,15 @@ module.exports = class Cacher {
 			for(let i=1; i<objects.length; i++) {
 				if(Array.isArray(currSet)) {
 					let currEl = objects[i][key];
+					let newLen = currEl.length;
+					let currLen = currSet.length;
 					//make sure that we're appending from where we left off
-					assert(currSet[currSet.length-1]['blockNumber'] == currEl['blockNumber'] + 1);
+					assert.deepEqual(currSet[currSet.length-1]['blockNumber'] + 1, currEl[0]['blockNumber']);
 					
 					//push the content
-					obj[key].push(currEl);
+					currSet.push.apply(currSet, currEl);
+
+					assert.deepEqual(currSet.length, currLen + newLen);
 				} else {
 					for(let blockN in objects[i]) {
 						assert(currSet[blockN-1] != undefined);
@@ -207,7 +213,7 @@ module.exports = class Cacher {
 		return obj;
 	}
 
-	getBlockRange(start, end) {
+	getBlockRange(start, end, preprocessCallbacks={}) {
 		if(end > this.prevEnd) {
 			//update the cache by downloading everything up until this moment
 			cacheAll(undefined, end);
@@ -219,6 +225,7 @@ module.exports = class Cacher {
 
 		let files = this.getFilesForBlockRange(start, end);
 		assert(files.length >= 1);
+		console.log("Loading files: ", files);
 
 		let objects = [];
 
@@ -228,6 +235,13 @@ module.exports = class Cacher {
 
 		let obj = this.mergeTimeSeries(objects);
 
+		for(let key in obj) {
+			if(preprocessCallbacks[key] !== undefined) {
+				console.log("Calling preprocess callback for "+key+" data.");
+				obj[key] = preprocessCallbacks[key](obj[key]);
+			}
+		}
+		
 		return obj;
 	}
 }
