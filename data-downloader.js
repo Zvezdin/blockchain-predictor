@@ -8,6 +8,9 @@ const assert = require('assert').strict;
 const ArgumentParser = require("argparse").ArgumentParser;
 const big = require("bignumber.js");
 
+const Cacher = require("./js/cacher.js");
+const cacher = new Cacher("/secondStorage/programming/chain/cache");
+
 const sw = Stopwatch.create();
 
 var web3;
@@ -137,225 +140,72 @@ function downloadWholeCourse(){
 	return downloadCourse(1, 999999999999999, "cryptocompare");
 }
 
-function downloadBlocks(startBlock, endBlock){
-	var blockDict = {}; //temp storage for the received blocks
 
-	var requestedBlocks = 0; //the amount of blocks we have requested to receive
-	var receivedBlocks = 0; //how many blocks have been successfully received
-	var expectedBlocks = endBlock - startBlock + 1;
-	var lastRequestedBlock = 0;
+function preprocessBlocks(blocks) {
+	for(let key in blocks) {
+		cleanBlock(blocks[key]);
+	}
 
-	console.log("Downloading blocks from "+startBlock+" to "+endBlock);
+	return blocks;
+}
 
-	sw.start();
+function preprocessContractLogs(logs) {
+	for(var i=0; i<logs.length; i++){ //clean the logs
+		cleanLog(logs[i]);
+	}
 
-	return new Promise(function(resolve, reject){
-		var handler = function(err, block){
-			if(err) console.error(err, block);
-			else {
-				//console.log("Got block "+block.number+" with "+block.transactions.length+" transactions in "+sw.elapsed.seconds+"s");
-				if(block == null){
-					console.error("Received empty block!");
-				} else {
-					cleanBlock(block)
+	return logs;
+}
 
-					blockDict[block.number] = block;
-				}
 
-				receivedBlocks++;
+function preprocessTransactionTraces(traces, noErrors=true, noEmpty=true){
+	var result = [];
 
-				if(receivedBlocks >= expectedBlocks){
-					let missing = listMissingBlocks(blockDict, startBlock, endBlock);
+	var emptyRemovals = 0;
+	var errorRemovals = 0;
 
-					if(missing.length > 0){
-						console.error("Detected missing blocks: "+missing+" Re-requesting them!");
-						requestBlocks(missing, handler);
-						return;
-					}
+	//key -> value of failed transactions
+	//because in traces, only the first trace is errored
+	var failedTransactions = {};
 
-					console.log("Received all blocks at "+(receivedBlocks / sw.elapsed.seconds)+"bl/s!");
-					resolve(blockDict);
-				} else if(requestedBlocks < expectedBlocks){
-					//get the next block
-					lastRequestedBlock++;
-					requestedBlocks++;
-					requestBlock(lastRequestedBlock, handler);
-				}
+	var rawResult = traces;
+
+	
+	for(var i=0; i<rawResult.length; i++) {
+		var el = rawResult[i];
+
+		if(noErrors) {
+			//block rewards don't have a transaction hash
+			if(el.transactionHash && (el.error || failedTransactions[el.transactionHash.toLowerCase()])) {
+				failedTransactions[el.transactionHash.toLowerCase()] = true;
+				//TODO: What about gas spendings and this depleting the account balance?
+				errorRemovals++;
+				continue;
 			}
 		}
 
-		let end = Math.min(startBlock + maxAsyncRequests - 1, endBlock);
-		
-		lastRequestedBlock = end;
-		requestedBlocks = Math.abs(end - startBlock) + 1;
-		requestBlockRange(startBlock, end, handler);
-
-		sw.stop();
-	});
-}
-
-//will get all logs from contracts within [start, end] block interval
-function getContractLogs(start, end){
-	return new Promise(function(resolve, reject) {
-		var filter = web3.eth.filter({'fromBlock': start, 'toBlock': end});
-		
-		var handlerCB = function(err, res){
-			if(err){
-				console.error(err);
-				reject(err);
-				return;
-			}
-
-			for(var i=0; i<res.length; i++){ //clean the logs
-				cleanLog(res[i]);
-			}
-
-			console.log("Received logs with length ", res.length);
-
-			resolve(res);
+		if(el.type !== 'reward' && el.type !== 'call' && el.type !== 'create' && el.type !== 'suicide'){
+			console.log("Found something different!")
+			console.dir(el, {depth:null})
 		}
 
-		filter.get(handlerCB)
+		cleanAndNormalizeTrace(el);
 
-		console.log("Getting logs for blocks from/to", start, end);
-	});
-}
-
-//returns a promise for all transaction traces for the block range [start, end]
-//requires the parity node to run! Only parity supports JSON RPC transaction tracing api!
-function getTransactionTraces(start, end, batchSize=100000, noErrors=true, noEmpty=true){
-	//TODO: If an error occurs, try to get it in smaller chunks
-	console.log("Getting all tx traces from "+start+" to "+end);
-	return new Promise(async function(resolve, reject) {
-		var result = [];
-
-		var emptyRemovals = 0;
-		var errorRemovals = 0;
-
-		//key -> value of failed transactions
-		//because in traces, only the first trace is errored
-		var failedTransactions = {};
-
-		for(var offset=new big(0);; offset = offset.add(batchSize)){
-			var params = {
-				method: "trace_filter",
-				params: [{fromBlock: "0x" + (+start).toString(16), toBlock: "0x" + (+end).toString(16), after: +offset.valueOf(), count: batchSize}],
-				jsonrpc: "2.0",
-				id: "1583"
-			};
-
-			//var out = web3.currentProvider.send(params);
-			var out = await web3CustomSend(params);
-
-			var rawResult = out.result;
-
-			if(rawResult.length == 0){
-				//we're done here!
-				break;
-			}
+		if(noEmpty && el.value == '0x0' && el.gasUsed == '0x0' && el.gas == '0x0') {
+			//Warning: There are transactions that use 0 gas and transfer 0 wei, but have provided gas.
+			//not sure if we should discard those or not. 
+			//they don't look like to change blockchain state though
 			
-			console.log("Received a batch of "+rawResult.length+" traces.");
-
-			for(var i=0; i<rawResult.length; i++) {
-				var el = rawResult[i];
-
-				if(noErrors) {
-					if(el.error || failedTransactions[el.transactionHash]) {
-						failedTransactions[el.transactionHash] = true;
-						//TODO: What about gas spendings and this depleting the account balance?
-						errorRemovals++;
-						continue;
-					}
-				}
-
-				if(el.type !== 'reward' && el.type !== 'call' && el.type !== 'create' && el.type !== 'suicide'){
-					console.log("Found something different!")
-					console.dir(el, {depth:null})
-				}
-
-				cleanAndNormalizeTrace(el);
-
-				if(noEmpty && el.value == '0x0' && el.gasUsed == '0x0' && el.gas == '0x0') {
-					//Warning: There are transactions that use 0 gas and transfer 0 wei, but have provided gas.
-					//not sure if we should discard those or not. 
-					//they don't look like to change blockchain state though
-					
-					emptyRemovals++;
-					continue;
-				}
-
-				result.push(el);
-			}
-
-			if(rawResult.length < batchSize){
-				//this was the last batch of traces 
-				break;
-			}
-		
+			emptyRemovals++;
+			continue;
 		}
 
-		console.log(result[0], result[result.length-1]);
-
-		assert(start == 0 || result[0].blockNumber == start);
-		assert(result[result.length-1].blockNumber == end);
-
-		console.log("Received traces with length "+result.length+", excluding "+emptyRemovals+" empty traces and "+errorRemovals+" errored ones.");
-		resolve(result);
-	});
-}
-
-function web3CustomSend(params) {
-	return new Promise(function(resolve, reject){
-		web3.currentProvider.sendAsync(params, function(err, res){
-			if(err){
-				reject(err);
-			} else {
-				resolve(res);
-			}
-		});
-	});
-}
-
-function getAll(web3Function, inputs, callback){
-	results = []
-	received = 0;
-	expected = inputs.length
-	requested = 0
-
-	var getNext = function(hdlr){
-		web3Function(inputs[requested], hdlr);
-
-		requested++;
+		result.push(el);
 	}
 
-	var handler = function(err, res){
-		if(err){
-			console.error(err);
-			getNext(handler); //there was problem, try again
-		}
-		else {
-			if(res == null){
-				console.error("Received empty result!");
-			} else {
-				results.push(res)
-			}
-
-			received++;
-
-			if(received >= expected){
-				callback(results);
-
-			} else if(requested < expected){
-				//get the next item
-				getNext(handler);
-			}
-		}
-	}
-
-	for(i = 0; i<maxAsyncRequests*2 && i<expected; i++){
-		getNext(handler);
-	}
+	return result;
 }
+
 
 function cleanLog(log){
 	log.hash = log.transactionHash; //rename to just hash, so it falls in line with 'hash' in a transaction
@@ -621,38 +471,6 @@ function extractTxsFromBlockDict(blockDict){
 	return transactions;
 }
 
-//requests a given block range in the interval [start, end] (inclusive of end)
-function requestBlockRange(start, end, handler){
-	for(let i=start; i<=end; i++) {
-		requestBlock(i, handler);
-	}
-}
-
-//requests blocks from given array of block numbers
-function requestBlocks(blocks, handler){
-	for(let i=0; i<blocks.length; i++) {
-		requestBlock(blocks[i], handler);
-	}
-}
-
-//requests a block and calls the given handler with the result
-function requestBlock(blockN, handler, includeTXs=true){
-	web3.eth.getBlock(blockN, includeTXs, handler);
-}
-
-//iterates the dict with keys from first to first+len and returns an array of missing keys
-function listMissingBlocks(dict, first, last){
-	let missing = [];
-
-	for(let bl = first; bl <= last; bl++){
-		if(dict[bl] == null){
-			missing.push(bl);
-		}
-	}
-
-	return missing;
-}
-
 function structureBlockchainData(blockDict, logs, traces){
 	let transactions = extractTxsFromBlockDict(blockDict);
 
@@ -682,71 +500,19 @@ function structureBlockchainData(blockDict, logs, traces){
 	return blockchain;
 }
 
-//this function is to make quick functionality test - not to be confused with unit testing.
-function testAsyncRequests(){
-	initBlockchain()
-
-	received = 0
-	expected = 10000
-
-	var handler2 = function(err, res){
-		received++
-
-		if (err){
-			console.error("res is null! Error:");
-			console.error(err);
-			console.log("Progress", received, expected);
-		}
-
-		delete res.blockHash;
-
-		var curr = (new Date).getTime();
-
-		if(received == expected){
-			console.log("Time it took was", (curr-start))
-		}
-	}
-
-	var start = (new Date).getTime();
-	for(var i=0; i<expected; i++){
-		web3.eth.getTransactionReceipt("0x674d990c9a298fd995f02ef4b923211f3e4208828014417ba45f8d467657ee38", handler2);
-	}
-}
-
-//this function is to make quick functionality test - not to be confused with unit testing.
-function testFilters(){
-	initBlockchain();
-
-	var filter = web3.eth.filter({'fromBlock': 3500000, 'toBlock': 3510000});
-
-	var handlerCB = function(err, res){
-		if(err) console.error(err);
-
-		console.log("Received results with length ", res.length);
-
-		for(var i=0; i<res.length; i++){
-			if(!contracts[res[i].address]){
-				console.error("Addess", res[i].address, "is not in our contracts db!!!");
-			}
-		}
-
-		console.log(res[0])
-		console.log(res[res.length-1])
-	}
-
-	filter.get(handlerCB)
-}
-
 async function saveBlockchain(start, end, filename) {
 	if(!initBlockchain()) return;
 
-	const tracesReq = getTransactionTraces(start, end);
-	const logsReq = getContractLogs(start, end);
-	const blocksReq = downloadBlocks(start, end);
+	let preprocessCallbacks = {'block': preprocessBlocks, 'log': preprocessContractLogs, 'trace': preprocessTransactionTraces};
 
-	const res = await Promise.all([blocksReq, logsReq, tracesReq]);
+	let res = cacher.getBlockRange(start, end, preprocessCallbacks);
 
-	let blockchain = structureBlockchainData(res[0], res[1], res[2]);
+	console.log("yes friend");
+	for(let key in res) {
+		console.log(key);
+	}
+	
+	let blockchain = structureBlockchainData(res['block'], res['log'], res['trace']);
 	
 	if(filename == null){
 		filename = datadir+"blocks "+blockchain['blocks'][0].number+"-"+blockchain['blocks'][blockchain['blocks'].length-1].number+".json";
