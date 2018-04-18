@@ -10,60 +10,62 @@ module.exports = class Getter {
 		assert(this.web3.isConnected());
 	}
 
-	async downloadBlocks(startBlock, endBlock){
-		var blockDict = {}; //temp storage for the received blocks
-	
-		var requestedBlocks = 0; //the amount of blocks we have requested to receive
-		var receivedBlocks = 0; //how many blocks have been successfully received
-		var expectedBlocks = endBlock - startBlock + 1;
-		var lastRequestedBlock = 0;
-	
-		console.log("Downloading blocks from "+startBlock+" to "+endBlock);
-	
+	downloadBlocks(startBlock, endBlock){
 		var self = this;
 
-		sw.start();
+		return new Promise(function(resolve, reject){
+			var blockDict = {}; //temp storage for the received blocks
 
-		var handler = function(err, block){
-			if(err) console.error(err, block);
-			else {
-				//console.log("Got block "+block.number+" with "+block.transactions.length+" transactions in "+sw.elapsed.seconds+"s");
-				if(block == null){
-					console.error("Received empty block!");
-				} else {
-					blockDict[block.number] = block;
-				}
+			var requestedBlocks = 0; //the amount of blocks we have requested to receive
+			var receivedBlocks = 0; //how many blocks have been successfully received
+			var expectedBlocks = endBlock - startBlock + 1;
+			var lastRequestedBlock = 0;
+		
+			console.log("Downloading blocks from "+startBlock+" to "+endBlock);
 
-				receivedBlocks++;
+			//sw.start();
 
-				if(receivedBlocks >= expectedBlocks){
-					let missing = self.listMissingBlocks(blockDict, startBlock, endBlock);
-
-					if(missing.length > 0){
-						console.error("Detected missing blocks: "+missing+" Re-requesting them!");
-						self.requestBlocks(missing, handler);
-						return;
+			var handler = function(err, block){
+				if(err) console.error(err, block);
+				else {
+					//console.log("Got block "+block.number+" with "+block.transactions.length+" transactions in "+sw.elapsed.seconds+"s");
+					if(block == null){
+						console.error("Received empty block!");
+					} else {
+						blockDict[block.number] = block;
 					}
 
-					console.log("Received all blocks at "+(receivedBlocks / sw.elapsed.seconds)+"bl/s!");
-					return blockDict;
-				} else if(requestedBlocks < expectedBlocks){
-					//get the next block
-					lastRequestedBlock++;
-					requestedBlocks++;
-					self.requestBlock(lastRequestedBlock, handler);
+					receivedBlocks++;
+
+					if(receivedBlocks >= expectedBlocks){
+						let missing = self.listMissingBlocks(blockDict, startBlock, endBlock);
+
+						if(missing.length > 0){
+							console.error("Detected missing blocks: "+missing+" Re-requesting them!");
+							self.requestBlocks(missing, handler);
+							return;
+						}
+
+						console.log("Received all blocks at "+(receivedBlocks / sw.elapsed.seconds)+"bl/s!");
+						resolve(blockDict);
+					} else if(requestedBlocks < expectedBlocks){
+						//get the next block
+						lastRequestedBlock++;
+						requestedBlocks++;
+						self.requestBlock(lastRequestedBlock, handler);
+					}
 				}
 			}
-		}
 
-		let end = Math.min(startBlock + maxAsyncRequests - 1, endBlock);
-		
-		lastRequestedBlock = end;
-		requestedBlocks = Math.abs(end - startBlock) + 1;
+			let end = Math.min(startBlock + maxAsyncRequests - 1, endBlock);
+			
+			lastRequestedBlock = end;
+			requestedBlocks = Math.abs(end - startBlock) + 1;
 
-		this.requestBlockRange(startBlock, end, handler);
+			self.requestBlockRange(startBlock, end, handler);
 
-		sw.stop();
+			//sw.stop();
+		});
 	}
 
 	//iterates the dict with keys from first to first+len and returns an array of missing keys
