@@ -4,4 +4,4 @@ const get = new Getter(new Web3(new Web3.providers.HttpProvider("http://localhos
 const Cacher = require("./cacher.js");
 const cacher = new Cacher("/secondStorage/programming/chain/cache");
 
-cacher.cacheAll(1000);
+cacher.cacheAll(20);

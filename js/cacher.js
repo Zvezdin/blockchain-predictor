@@ -192,19 +192,19 @@ module.exports = class Cacher {
 					let newLen = currEl.length;
 					let currLen = currSet.length;
 					//make sure that we're appending from where we left off
-					assert.deepEqual(currSet[currSet.length-1]['blockNumber'] + 1, currEl[0]['blockNumber']);
+					assert(currSet[currSet.length-1]['blockNumber'] + 1 <= currEl[0]['blockNumber']);
 					
 					//push the content
 					currSet.push.apply(currSet, currEl);
 
 					assert.deepEqual(currSet.length, currLen + newLen);
 				} else {
-					for(let blockN in objects[i]) {
+					for(let blockN in objects[i][key]) {
 						assert(currSet[blockN-1] != undefined);
 						assert(currSet[blockN] == undefined);
 
 						//copy the content key-by-key
-						currSet[blockN] = objects[i][blockN];
+						currSet[blockN] = objects[i][key][blockN];
 					}
 				}
 			}
@@ -230,17 +230,17 @@ module.exports = class Cacher {
 		let objects = [];
 
 		for(let i=0; i<files.length; i++) {
-			objects.push(this.loadFile(files[i], (i == 0 ? start : undefined), (i == files.length-1 ? end : undefined)));
+			let currObj = this.loadFile(files[i], (i == 0 ? start : undefined), (i == files.length-1 ? end : undefined));
+			for(let key in currObj) {	
+				if(preprocessCallbacks[key] !== undefined) {
+					console.log("Calling preprocess callback for "+key+" data.");
+					currObj[key] = preprocessCallbacks[key](currObj[key]);
+				}
+			}
+			objects.push(currObj);
 		}
 
 		let obj = this.mergeTimeSeries(objects);
-
-		for(let key in obj) {
-			if(preprocessCallbacks[key] !== undefined) {
-				console.log("Calling preprocess callback for "+key+" data.");
-				obj[key] = preprocessCallbacks[key](obj[key]);
-			}
-		}
 		
 		return obj;
 	}
