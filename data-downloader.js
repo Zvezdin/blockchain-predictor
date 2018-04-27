@@ -507,7 +507,6 @@ async function saveBlockchain(start, end, filename) {
 
 	let res = cacher.getBlockRange(start, end, preprocessCallbacks);
 
-	console.log("yes friend");
 	for(let key in res) {
 		console.log(key);
 	}
@@ -515,7 +514,7 @@ async function saveBlockchain(start, end, filename) {
 	let blockchain = structureBlockchainData(res['block'], res['log'], res['trace']);
 	
 	if(filename == null){
-		filename = datadir+"blocks "+blockchain['blocks'][0].number+"-"+blockchain['blocks'][blockchain['blocks'].length-1].number+".json";
+		filename = datadir+"blocks "+blockchain['block'][0].number+"-"+blockchain['block'][blockchain['block'].length-1].number+".json";
 	}
 
 	saveJSON(blockchain, filename);
