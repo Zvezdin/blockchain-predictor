@@ -83,8 +83,8 @@ module.exports = class Cacher {
 	}
 
 	getFilesForBlockRange(start, end) {
-		assert(this.blockToStart[start]);
-		assert(this.blockToStart[end]);
+		assert(this.blockToStart[start] !== undefined);
+		assert(this.blockToStart[end] !== undefined);
 
 		let files = [];
 
@@ -93,10 +93,10 @@ module.exports = class Cacher {
 
 		while(currentEnd < end){
 			let tmp = this.blockToStart[currentStart];
-			assert(tmp);
+			assert(tmp !== undefined);
 
 			let file = this.startToFile[tmp];
-			assert(file);
+			assert(file !== undefined);
 
 			files.push(file);
 
@@ -127,26 +127,30 @@ module.exports = class Cacher {
 	loadFile(filename, start=undefined, end=undefined) {
 		let obj = jsonUtil.load(this.folder + "/" + filename);
 
-		if(start || end){ //filter by given start or end
+		if(start !== undefined || end !== undefined){ //filter by given start or end
 			for(let key in obj) { //for each key ex. block, trace, log, ...
 				if(Array.isArray(obj[key])){
 					let arr = obj[key];
+
+					console.log(arr.length, key, arr[0]);
 					for(let i=0; i<arr.length; i++) {
 						if(
-							(start && arr[i]['blockNumber'] < start) ||
-							(end && arr[i]['blockNumber'] > end)
+							(start !== undefined && arr[i]['blockNumber'] < start) ||
+							(end !== undefined && arr[i]['blockNumber'] > end)
 						) {
 							arr.splice(i, 1);
 							i--;
 						}
 					}
 					
-					if(start) {
-						assert(arr[0]['blockNumber'] == start);
-					}
+					if(arr.length > 0){
+						if(start !== undefined) {
+							assert(arr[0]['blockNumber'] >= start);
+						}
 
-					if(end) {
-						assert(arr[arr.length-1]['blockNumber'] == end);
+						if(end !== undefined) {
+							assert(arr[arr.length-1]['blockNumber'] <= end);
+						}
 					}
 				} else {
 					let dict = obj[key];
@@ -154,19 +158,19 @@ module.exports = class Cacher {
 						assert(dict[blockN]['number'] == +blockN);
 
 						if(
-							(start && +blockN < start) ||
-							(end && +blockN > end)
+							(start !== undefined && +blockN < start) ||
+							(end !== undefined && +blockN > end)
 						) {
 							delete dict[blockN];
 						}
 					}
 
-					if(start) {
+					if(start !== undefined) {
 						assert(dict[start] != undefined);
 						assert(dict[start-1] == undefined);
 					}
 
-					if(end) {
+					if(end !== undefined) {
 						assert(dict[end] != undefined);
 						assert(dict[end+1] == undefined);
 					}
