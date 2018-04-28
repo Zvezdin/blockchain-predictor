@@ -11,6 +11,9 @@ const big = require("bignumber.js");
 const Cacher = require("./js/cacher.js");
 const cacher = new Cacher("/secondStorage/programming/chain/cache");
 
+const JsonUtil = require("./js/json_util.js");
+const jsonUtil = new JsonUtil();
+
 const sw = Stopwatch.create();
 
 var web3;
@@ -63,17 +66,6 @@ function JSONRequest(request, callback){
 		console.error(e);
 		callback(undefined);
 	});
-}
-
-function saveJSON(json, filename){
-	fs.writeFile(filename, JSON.stringify(json), function(err) {
-		if(err) {
-			console.log(err);
-			return;
-		}
-
-		console.log("The data was saved as "+filename);
-	}); 
 }
 
 function downloadCourseCryptocompare(start, end, callback){
@@ -158,21 +150,26 @@ function preprocessContractLogs(logs) {
 }
 
 
-function preprocessTransactionTraces(traces, noErrors=true, noEmpty=true){
-	var result = [];
+function preprocessTransactionTraces(traces, noErrors=true, noEmpty=true, noSuicideSpam=true){
+	let result = [];
 
-	var emptyRemovals = 0;
-	var errorRemovals = 0;
+	let emptyRemovals = 0;
+	let errorRemovals = 0;
+	let suicideRemovals = 0;
 
 	//key -> value of failed transactions
 	//because in traces, only the first trace is errored
-	var failedTransactions = {};
+	let failedTransactions = {};
 
-	var rawResult = traces;
+	//addr -> bool whether a contract has been killed
+	//to filter any further calls to this contract
+	let killedContracts = {};
+
+	let rawResult = traces;
 
 	
-	for(var i=0; i<rawResult.length; i++) {
-		var el = rawResult[i];
+	for(let i=0; i<rawResult.length; i++) {
+		let el = rawResult[i];
 
 		if(noErrors) {
 			//block rewards don't have a transaction hash
@@ -184,12 +181,18 @@ function preprocessTransactionTraces(traces, noErrors=true, noEmpty=true){
 			}
 		}
 
-		if(el.type !== 'reward' && el.type !== 'call' && el.type !== 'create' && el.type !== 'suicide'){
-			console.log("Found something different!")
-			console.dir(el, {depth:null})
+		cleanAndNormalizeTrace(el);
+
+		if(noSuicideSpam) {
+			if(killedContracts[el.to] || killedContracts[el.from]) {
+				suicideRemovals++;
+				continue;
+			}
 		}
 
-		cleanAndNormalizeTrace(el);
+		if(el.type == 'suicide') {
+			killedContracts[el.from] = true;
+		}
 
 		if(noEmpty && el.value == '0x0' && el.gasUsed == '0x0' && el.gas == '0x0') {
 			//Warning: There are transactions that use 0 gas and transfer 0 wei, but have provided gas.
@@ -202,6 +205,8 @@ function preprocessTransactionTraces(traces, noErrors=true, noEmpty=true){
 
 		result.push(el);
 	}
+
+	console.log("Cleaned traces with "+emptyRemovals+" empty, "+errorRemovals+" error and "+suicideRemovals+" suicide removals.");
 
 	return result;
 }
@@ -507,17 +512,28 @@ async function saveBlockchain(start, end, filename) {
 
 	let res = cacher.getBlockRange(start, end, preprocessCallbacks);
 
-	for(let key in res) {
-		console.log(key);
+	let txCount = 0;
+
+	for(let bl in res['block']) {
+		txCount += res['block'][bl].transactions.length;
 	}
+
+	let traceCount = res['trace'].length;
+
+	console.log("The resulting package contains "+txCount+" transactions, "+res['log'].length+" logs and "+traceCount+" traces.");
 	
+	if(traceCount > txCount * 5) {
+		console.error("Too many traces compared to transactions! Breaking, take a look.");
+		assert(false);
+	}
+
 	let blockchain = structureBlockchainData(res['block'], res['log'], res['trace']);
 	
 	if(filename == null){
 		filename = datadir+"blocks "+blockchain['block'][0].number+"-"+blockchain['block'][blockchain['block'].length-1].number+".json";
 	}
 
-	saveJSON(blockchain, filename);
+	jsonUtil.save(blockchain, filename);
 }
 
 async function saveCourse(filename) {
@@ -525,8 +541,7 @@ async function saveCourse(filename) {
 	if(!filename){
 		filename = 'data/course.json';
 	}
-
-	saveJSON(course, filename);
+	jsonUtil.save(course, filename)
 }
 
 function main() {
