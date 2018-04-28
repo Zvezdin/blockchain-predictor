@@ -4,8 +4,9 @@ module.exports = class JsonUtil {
 	constructor(){}
 
 	save(json, filename) {
+		let bytes = JSON.stringify(json);
+		console.log("Saving "+bytes.length+" bytes as "+filename);
 		fs.writeFileSync(filename, JSON.stringify(json));
-		console.log("The data was saved as "+filename);
 	}
 
 	load(filename) {
