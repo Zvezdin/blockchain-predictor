@@ -15,7 +15,7 @@ class PropertyAccountNumberDistribution(Property):
 	def __init__(self):
 		super().__init__()
 		self.name = "accountNumberDistribution"
-		self.requires = ['tx']
+		self.requires = ['trace']
 		self.requiresHistoricalData = True
 		self.accounts = {} #dict, holding an array of feature values for each account
 		self.groupCount = [10, 10] 
@@ -29,7 +29,7 @@ class PropertyAccountNumberDistribution(Property):
 		self.contractData = False #to load contract data or not
 		self.unifyContracts = True #to consider two or more contracts, participating in the same transaction as the same
 
-		self.ignoreTx = False #if we do not require usage of Tx data, we can ignore it for better performance
+		self.ignoreTrace = False #if we do not require usage of Tx data, we can ignore it for better performance
 
 		self.actualMax = [None, None]
 
@@ -56,13 +56,13 @@ class PropertyAccountNumberDistribution(Property):
 		self.contractAlias = {} #dict to hold references that unify multiple contracts
 			#into one, based on common activity
 
-		if self.ignoreTx and 'tx' in self.requires:
-			self.requires.remove('tx')
+		if self.ignoreTrace and 'trace' in self.requires:
+			self.requires.remove('trace')
 
 		self.pastValues = [{}] * len(self.lookBack)
 
 	def processTick(self, data):
-		txs = data['tx']
+		traces = data['trace']
 
 		lastTime = 0
 
@@ -111,50 +111,51 @@ class PropertyAccountNumberDistribution(Property):
 			avgValue = {}
 			numTxs = {}
 
-			if not self.ignoreTx:
-				for tx in txs.itertuples():
+			if not self.ignoreTrace:
+				for trace in traces.itertuples():
 					try:
-						sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
+						sender = trace._3 #the field is named 'from', but it is renamed to its index in the tuple
 									#due to it being a python keyword. Beware, this will break if the raw data changes.
 					except AttributeError:
-						print(tx) #debug info to change the attribute
+						print(trace) #debug info to change the attribute
 						raise
 
 					#we are going to use contract aliasing, if the receiver is a contract and has an alias
 
 					if self.unifyContracts:
-						if tx.hash in hashMap: #if the hashes match
-							if tx.to != hashMap[tx.hash]: #if the addresses are different
-								self.contractAlias[tx.to] = hashMap[tx.hash] #make the connection
+						if not (type(trace.to) == float and math.isnan(trace.transactionHash)) and trace.transactionHash in hashMap: #if the hashes match
+							if trace.to != hashMap[trace.transactionHash]: #if the addresses are different
+								self.contractAlias[trace.to] = hashMap[trace.transactionHash] #make the connection
 								if debug:
-									print("Alias from %s to %s because of TX %s" % (tx.to, hashMap[tx.hash], tx.hash))
+									print("Alias from %s to %s because of TX %s" % (trace.to, hashMap[trace.transactionHash], trace.transactionHash))
 
-					receiver = self.contractAlias.get(tx.to, tx.to) #if it is a contract and we have an alias, we will use that.
+					receiver = self.contractAlias.get(trace.to, trace.to) #if it is a contract and we have an alias, we will use that.
 					#otherwise, use whatever currently given
 
 					if type(receiver) == float and math.isnan(receiver):
 						receiver = None #receiver is None when the TX is contract publishing
 
+					if type(sender) == float and math.isnan(sender):
+						sender = None #receiver is None when the TX is contract publishing
+
 					if self.useCache:
-						self.groupCache[sender] = None #clear the cache for this person, as their feature values will change
+						if sender is not None:
+							self.groupCache[sender] = None #clear the cache for this person, as their feature values will change
 						if receiver is not None:
 							self.groupCache[receiver] = None
 
-					timestamp = tx.date.value // 10**9 #EPOCH time
+					timestamp = trace.date.value // 10**9 #EPOCH time
 
 					self.lastTimestamp = max(self.lastTimestamp, timestamp)
 
 					for i, feature in enumerate(self.features):
-						val = float(tx.value)
-
-						if int(val) != val:
-							raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
-						val = int(val)
+						val = int(trace.value, 0) #automatically cast hex to int
 
 						if feature == 'balance':
 							if receiver is not None:
 								self.addAccFeat(receiver, i, val)				
-							self.subAccFeat(sender, i, val)
+							if sender is not None:
+								self.subAccFeat(sender, i, val)
 
 						if feature == 'contractBalance': #track the balance of contracts
 							if sender in self.contracts:
@@ -169,7 +170,7 @@ class PropertyAccountNumberDistribution(Property):
 
 						if feature == 'contractOutVolume':
 							if sender in self.contracts:
-								print("Outgoing transaction from %s with value %d and TX hash" % (sender, val, tx.hash))
+								print("Outgoing transaction from %s with value %d and TX hash %s" % (sender, val, trace.hash))
 								outVolume.setdefault(sender, 0)
 								outVolume[sender] += val
 
@@ -186,7 +187,8 @@ class PropertyAccountNumberDistribution(Property):
 						if feature == 'lastSeen':
 							if receiver is not None: 
 								self.setAccFeat(receiver, i, timestamp)
-							self.setAccFeat(sender, i, timestamp)
+							if sender is not None:
+								self.setAccFeat(sender, i, timestamp)
 				if 'contractTx' in self.features:
 					for contract in numTx:
 						#method of keeping only the sum of the values for previous x time ticks:
