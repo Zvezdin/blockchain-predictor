@@ -194,17 +194,18 @@ module.exports = class Cacher {
 					let currEl = objects[i][key];
 					let newLen = currEl.length;
 					let currLen = currSet.length;
+
 					//make sure that we're appending from where we left off
-					assert(currSet[currSet.length-1]['blockNumber'] + 1 <= currEl[0]['blockNumber']);
-					
-					if(currEl.length > 0){
-						//push the content
-						for(let i=0; i<currEl.length; i++) {
-							currSet.push(currEl[i]);
-						}
-						
-						assert.deepEqual(currSet.length, currLen + newLen);
+					if(currSet.length > 0 && currEl.length > 0){
+						assert(currSet[currSet.length-1]['blockNumber'] + 1 <= currEl[0]['blockNumber']);
 					}
+					
+					//push the content
+					for(let i=0; i<currEl.length; i++) {
+						currSet.push(currEl[i]);
+					}
+					
+					assert.deepEqual(currSet.length, currLen + newLen);
 				} else {
 					for(let blockN in objects[i][key]) {
 						assert(currSet[blockN-1] != undefined);
