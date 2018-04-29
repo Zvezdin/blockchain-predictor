@@ -163,6 +163,7 @@ function preprocessTransactionTraces(traces, noErrors=true, noEmpty=true, noSuic
 
 	//addr -> bool whether a contract has been killed
 	//to filter any further calls to this contract
+	//see: https://etherscan.io/tx/0x5c8628001bcfca3f2f4e8e3e345491d3971c61af36b6d37b57117ac97e711ab5 for example
 	let killedContracts = {};
 
 	let rawResult = traces;
@@ -513,16 +514,19 @@ async function saveBlockchain(start, end, filename) {
 	let res = cacher.getBlockRange(start, end, preprocessCallbacks);
 
 	let txCount = 0;
+	let blCount = 0;
 
 	for(let bl in res['block']) {
 		txCount += res['block'][bl].transactions.length;
+		blCount++;
 	}
 
 	let traceCount = res['trace'].length;
 
 	console.log("The resulting package contains "+txCount+" transactions, "+res['log'].length+" logs and "+traceCount+" traces.");
 	
-	if(traceCount > txCount * 5) {
+	//check if there have been too many traces, but only if we actually had enough transactions
+	if(txCount > blCount && traceCount > txCount * 5) {
 		console.error("Too many traces compared to transactions! Breaking, take a look.");
 		assert(false);
 	}
