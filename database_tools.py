@@ -6,6 +6,7 @@ import pickle
 import codecs
 
 import pandas as pd
+import regex as re
 from arctic import Arctic
 from arctic import TICK_STORE
 from arctic import CHUNK_STORE
@@ -236,6 +237,10 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 				print("There was an error while reading. Did you enter the correct key?")
 		if args.remove:
 			try:
-				removeDB(getChunkstore(), args.key)
+				key = args.key
+		
+				for dbkey in getChunkstore().list_symbols():
+					if re.fullmatch(key, dbkey) is not None:
+						removeDB(getChunkstore(), dbkey)
 			except:
 				print("There was an error while removing. Did you enter the correct key?")
