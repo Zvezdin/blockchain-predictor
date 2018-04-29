@@ -295,10 +295,20 @@ def futureMaxMinValues(values, periods=10, minValues=False):
 			newValues.append(None)
 		else:
 			subset = values[i:(i+periods)]
+			assert(len(subset) > 0)
+
 			if(minValues):
-				val = min(subset)
+				if not isinstance(subset[0], np.ndarray):
+					print(type(subset[0]))
+					val = min(subset)
+				else:
+					val = np.array(subset).min(0)
 			else:
-				val = max(subset)
+				if not isinstance(subset[0], np.ndarray):
+					print(type(subset[0]))
+					val = max(subset)
+				else:
+					val = np.array(subset).max(0)
 			newValues.append(val)
 	return newValues
 
