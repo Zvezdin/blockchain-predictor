@@ -37,7 +37,7 @@ module.exports = class Cacher {
 		}
 	}
 
-	async cacheAll(series=50, end=5000050) {
+	async cacheAll(series=50, end=5528000) {
 		let startBlock = this.prevEnd+1;
 		
 		for(; startBlock <= end - series; startBlock += series){

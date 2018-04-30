@@ -10,7 +10,7 @@ from Naked.toolshed.shell import execute_js, muterun_js
 
 import database_tools as db
 
-blockSeries = 2000
+blockSeries = 5000
 attemptsThreshold = 10
 
 logsSeparate = False
@@ -107,7 +107,7 @@ def downloadBlockchain(start=0, targetBlock=None):
 	series = blockSeries
 
 	if targetBlock is None:
-		targetBlock = 5300000 #TODO: Have automatic detection of latest block
+		targetBlock = 5528000-series #TODO: Have automatic detection of latest block
 	if series > targetBlock - currentBlock:
 		series = targetBlock - currentBlock
 	print("Starting to download blocks after", currentBlock, " and with target ", targetBlock)
