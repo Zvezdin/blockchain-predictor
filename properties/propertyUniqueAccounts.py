@@ -19,7 +19,7 @@ class PropertyUniqueAccounts(Property):
 		#update our global dictionary of accounts
 		for tx in txs.itertuples():
 
-			sender = tx._2 #the field is named 'from', but it is renamed to its index in the tuple
+			sender = tx._4 #the field is named 'from', but it is renamed to its index in the tuple
 							#due to it being a python keyword. Beware, this will break if the raw data changes.
 			receiver = tx.to
 
