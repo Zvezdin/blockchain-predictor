@@ -1,5 +1,4 @@
 //Downloads certain blockchain data of the given time period and saves it as the given file (.json)
-const Web3 = require("web3");
 const https = require("https");
 const fs = require('fs');
 const Stopwatch = require("node-stopwatch").Stopwatch;
@@ -16,8 +15,6 @@ const jsonUtil = new JsonUtil();
 
 const sw = Stopwatch.create();
 
-var web3;
-
 var debug = true;
 
 var datadir = 'data/'
@@ -26,24 +23,6 @@ const maxAsyncRequests = 8;
 
 const saveSpace = true;
 
-function initBlockchain(){
-	if (typeof web3 !== 'undefined') {
-		web3 = new Web3(web3.currentProvider);
-	} else {
-	// set the provider from Web3.providers
-		console.log("Attempting connection to RPC...");
-		web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
-		if(web3.isConnected()) console.log("Successful connection!");
-		else{
-			console.error("Unsuccessful connection!\nMake sure that you have a local node running and that RPC / web3 is enabled on it");
-			return false;
-		}
-	}
-
-	console.log("Latest block number is " + web3.eth.blockNumber);
-
-	return true;
-}
 
 function JSONRequest(request, callback){
 	https.get(request, (res) => {
@@ -507,8 +486,6 @@ function structureBlockchainData(blockDict, logs, traces){
 }
 
 async function saveBlockchain(start, end, filename) {
-	if(!initBlockchain()) return;
-
 	let preprocessCallbacks = {'block': preprocessBlocks, 'log': preprocessContractLogs, 'trace': preprocessTransactionTraces};
 
 	let res = cacher.getBlockRange(start, end, preprocessCallbacks);
