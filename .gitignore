@@ -23,6 +23,7 @@ readme.pdf
 debug*.txt
 
 !materials/distributions/
+materials/distributions/*.mp4
 
 #IDE and Python files
 .vscode/
