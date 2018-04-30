@@ -27,7 +27,7 @@ class PropertyAccountNumberDistribution(Property):
 		self.lastTimestamp = 0 #will be updated
 
 		self.contractData = False #to load contract data or not
-		self.unifyContracts = True #to consider two or more contracts, participating in the same transaction as the same
+		self.unifyContracts = False #to consider two or more contracts, participating in the same transaction as the same
 
 		self.ignoreTrace = False #if we do not require usage of Tx data, we can ignore it for better performance
 
@@ -49,8 +49,8 @@ class PropertyAccountNumberDistribution(Property):
 
 	def updateConfig(self):
 		if self.contractData:
-			if 'logs' not in self.requires:
-				self.requires.append('logs')
+			if 'log' not in self.requires:
+				self.requires.append('log')
 			self.contracts = {}
 
 		self.contractAlias = {} #dict to hold references that unify multiple contracts
@@ -69,31 +69,25 @@ class PropertyAccountNumberDistribution(Property):
 		start = time.time()
 
 		if not fakeData:
-			hashMap = {} #dict that maps transaction hashes to the first contract address they point to
+			hashToContract = {} #dict that maps transaction hashes to the first contract address they point to
 
 			#replay the transactions and logs to update our state
 			if self.contractData:
-				logs = data['logs']
+				logs = data['log']
 				for log in logs.itertuples():
 
 					if self.unifyContracts:
-						if log.hash not in hashMap: #if we see this hash for the first time
-							hashMap[log.hash] = log.address #save the first contract this hash points to
+						if log.hash not in hashToContract: #if we see this hash for the first time
+							hashToContract[log.hash] = log.address #save the first contract this hash points to
 
-						if hashMap[log.hash] != log.address: #same TX, different event sources
-							self.contractAlias[log.address] = hashMap[log.hash] #make the connection between the two sources
+						if hashToContract[log.hash] != log.address: #same TX, different event sources
+							self.contractAlias[log.address] = hashToContract[log.hash] #make the connection between the two sources
 							if debug:
-								print("(LOG) Alias from %s to %s because of TX %s" % (log.address, hashMap[log.hash], log.hash))
+								print("(LOG) Alias from %s to %s because of TX %s" % (log.address, hashToContract[log.hash], log.hash))
 
 					contract = self.contractAlias.get(log.address, log.address) #if we have a connection, use the initial source
-					
-					new = False
-					if contract not in self.contracts:
-						self.contracts[contract] = True
-						new = True
 
-					timestamp = log.date.value // 10**9 #EPOCH time
-
+					#LOG-RELATED FEATURES
 					for i, feature in enumerate(self.features):
 						if feature == 'erc20':
 							if type(log.topic0) == str: #if we have any log topic
@@ -101,14 +95,10 @@ class PropertyAccountNumberDistribution(Property):
 								#'0xdcbc1c05240f31ff3ad067ef1ee35ce4997762752e3a095284754544f4c709d7' - Deposit event - not in ERC20 Standart
 								#'0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' - ERC20 Transfer method
 								self.addAccFeat(contract, i, 1) #add one to the total counter of that contract
-						if feature == 'contractLastSeen':
-							self.setAccFeat(contract, i, timestamp)
-						if feature == 'contractAge' and new:
-							self.setAccFeat(contract, i, timestamp)
 
 			inVolume = {}
 			outVolume = {}
-			avgValue = {}
+			cumulativeValue = {}
 			numTxs = {}
 
 			if not self.ignoreTrace:
@@ -123,19 +113,19 @@ class PropertyAccountNumberDistribution(Property):
 					#we are going to use contract aliasing, if the receiver is a contract and has an alias
 
 					if self.unifyContracts:
-						if not (type(trace.to) == float and math.isnan(trace.transactionHash)) and trace.transactionHash in hashMap: #if the hashes match
-							if trace.to != hashMap[trace.transactionHash]: #if the addresses are different
-								self.contractAlias[trace.to] = hashMap[trace.transactionHash] #make the connection
+						if not (isinstance(trace.to, float) and math.isnan(trace.transactionHash)) and trace.transactionHash in hashToContract: #if the hashes match
+							if trace.to != hashToContract[trace.transactionHash]: #if the addresses are different
+								self.contractAlias[trace.to] = hashToContract[trace.transactionHash] #make the connection
 								if debug:
-									print("Alias from %s to %s because of TX %s" % (trace.to, hashMap[trace.transactionHash], trace.transactionHash))
+									print("Alias from %s to %s because of TX %s" % (trace.to, hashToContract[trace.transactionHash], trace.transactionHash))
 
 					receiver = self.contractAlias.get(trace.to, trace.to) #if it is a contract and we have an alias, we will use that.
 					#otherwise, use whatever currently given
 
-					if type(receiver) == float and math.isnan(receiver):
+					if isinstance(receiver, float) and math.isnan(receiver):
 						receiver = None #receiver is None when the TX is contract publishing
 
-					if type(sender) == float and math.isnan(sender):
+					if isinstance(sender, float) and math.isnan(sender):
 						sender = None #receiver is None when the TX is contract publishing
 
 					if self.useCache:
@@ -148,56 +138,76 @@ class PropertyAccountNumberDistribution(Property):
 
 					self.lastTimestamp = max(self.lastTimestamp, timestamp)
 
+					#TREACE-RELATED FEATURES
 					for i, feature in enumerate(self.features):
 						val = int(trace.value, 0) #automatically cast hex to int
 
-						if feature == 'balance':
-							if receiver is not None:
-								self.addAccFeat(receiver, i, val)				
-							if sender is not None:
-								self.subAccFeat(sender, i, val)
-
-						if feature == 'contractBalance': #track the balance of contracts
-							if sender in self.contracts:
-								self.subAccFeat(sender, i, val)
-							if receiver in self.contracts:
-								self.addAccFeat(receiver, i, val)
-
-						if feature == 'contractInVolume':
-							if receiver in self.contracts:
-								inVolume.setdefault(receiver, 0)
-								inVolume[receiver] = inVolume[receiver] + val
-
-						if feature == 'contractOutVolume':
-							if sender in self.contracts:
-								print("Outgoing transaction from %s with value %d and TX hash %s" % (sender, val, trace.hash))
-								outVolume.setdefault(sender, 0)
-								outVolume[sender] += val
-
-						if feature == 'contractTx' or feature == 'contractAvgValue': #avgTxValue needs the amount of transactions
-							if receiver in self.contracts:
-								numTx.setdefault(receiver, 0)
-								numTx[receiver] += 1
-							#TODO: What about outgoing transactions?
-						if feature == 'contractAvgValue':
-							if receiver in self.contracs:
-								avgVal.setdefault(receiver, 0)
-								avgVal[receiver] += val
+						#features for all accounts
+						if not self.contractData:
+							if feature == 'balance':
+								if receiver is not None:
+									self.addAccFeat(receiver, i, val)				
+								if sender is not None:
+									self.subAccFeat(sender, i, val)
 							#TODO: Outgoing?
-						if feature == 'lastSeen':
-							if receiver is not None: 
+							elif feature == 'lastSeen':
+								if receiver is not None: 
+									self.setAccFeat(receiver, i, timestamp)
+								if sender is not None:
+									self.setAccFeat(sender, i, timestamp)
+						#features only for contracts
+						else:
+							newContract = False
+							if trace.type == 'create':
+								#if this contract has been created, mark it so we know it's a contract
+								self.contracts[receiver] = True
+								newContract = True
+
+							elif feature == 'contractBalance': #track the balance of contracts
+								if sender in self.contracts:
+									self.subAccFeat(sender, i, val)
+								if receiver in self.contracts:
+									self.addAccFeat(receiver, i, val)
+
+							elif feature == 'contractInVolume':
+								if receiver in self.contracts:
+									inVolume.setdefault(receiver, 0)
+									inVolume[receiver] += + val
+
+							elif feature == 'contractOutVolume':
+								if sender in self.contracts:
+									print("Outgoing transaction from %s with value %d and TX hash %s" % (sender, val, trace.hash))
+									outVolume.setdefault(sender, 0)
+									outVolume[sender] += val
+
+							elif feature == 'contractTx' or feature == 'contractAvgValue': #avgTxValue needs the amount of transactions
+								if receiver in self.contracts:
+									numTxs.setdefault(receiver, 0)
+									numTxs[receiver] += 1
+								#TODO: What about outgoing transactions?
+							elif feature == 'contractAvgValue':
+								if receiver in self.contracs:
+									cumulativeValue.setdefault(receiver, 0)
+									cumulativeValue[receiver] += val
+							elif feature == 'contractLastSeen':
+								if sender in self.contracts:
+									self.setAccFeat(sender, i, timestamp)
+								if receiver in self.contracts:
+									self.setAccFeat(receiver, i, timestamp)
+							elif feature == 'contractAge' and newContract:
+								#no need to check if receiver in self.contracts since it is marked in newContract
 								self.setAccFeat(receiver, i, timestamp)
-							if sender is not None:
-								self.setAccFeat(sender, i, timestamp)
+
+				#actions after replaying the traces
 				if 'contractTx' in self.features:
-					for contract in numTx:
-						#method of keeping only the sum of the values for previous x time ticks:
+					for contract in numTxs:
+						#TODO: method of keeping only the sum of the values for previous x time ticks:
 						#self.subAccFeat ... 
 						#self.addAccFeat(contract, self.features.index('contractTx'), numTx[contract])
-						self.setAccFeat(contract, self.features.index('contractTx'), numTx[contract])
+						self.setAccFeat(contract, self.features.index('contractTx'), numTxs[contract])
 				if 'contractAvgValue' in self.features:
-					for contract in avgValue:
-						self.setAccFeat(contract, self.features.index('contractAvgValue'), avgValue[contract] / numTx[contract])
+					for contract in cumulativeValue:
+						self.setAccFeat(contract, self.features.index('contractAvgValue'), cumulativeValue[contract] / numTxs[contract])
 				if 'contractInVolume' in self.features:
 					for contract in inVolume:
 						self.setAccFeat(contract, self.features.index('contractInVolume'), inVolume[contract])
