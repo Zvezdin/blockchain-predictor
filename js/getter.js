@@ -7,10 +7,15 @@ const maxAsyncRequests = 8;
 module.exports = class Getter {
 	constructor(web3) {
 		this.web3 = web3;
+	}
+
+	assertConnected() {
 		assert(this.web3.isConnected());
 	}
 
 	downloadBlocks(startBlock, endBlock){
+		this.assertConnected();
+		
 		var self = this;
 
 		return new Promise(function(resolve, reject){
@@ -103,6 +108,8 @@ module.exports = class Getter {
 	//returns a promise for all transaction traces for the block range [start, end]
 	//requires the parity node to run! Only parity supports JSON RPC transaction tracing api!
 	getTransactionTraces(start, end, batchSize=100000){
+		this.assertConnected();
+
 		//TODO: If an error occurs, try to get it in smaller chunks
 		console.log("Getting all tx traces from "+start+" to "+end);
 
@@ -157,6 +164,8 @@ module.exports = class Getter {
 
 	//will get all logs from contracts within [start, end] block interval
 	getContractLogs(start, end){
+		this.assertConnected();
+
 		var self = this;
 
 		return new Promise(function(resolve, reject) {
@@ -181,6 +190,8 @@ module.exports = class Getter {
 	}
 
 	async getAll(start, end) {
+		this.assertConnected();
+
 		const tracesReq = this.getTransactionTraces(start, end);
 		const logsReq = this.getContractLogs(start, end);
 		const blocksReq = this.downloadBlocks(start, end);
