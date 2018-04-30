@@ -68,7 +68,7 @@ def createAnimation(frames, dates):
 
 	global args
 
-	ani.save(args.renderTimelapse+'/'+args.data+'.mp4')
+	ani.save(args.renderTimelapse)
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	np.set_printoptions(precision=3, linewidth=180)
@@ -84,7 +84,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--trim', dest='trim', action='store_true', help='A frame can be trimmed from values on Y=0 and X=end.')
 	parser.add_argument('--log2', dest='log2', action='store_true', help='Scale all account counts by a log2.')
 	parser.add_argument('--hbar', dest='hbar', action='store_true', help='Position the colorbar horisontally.')
-	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as images in the specified directory.')
+	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as a video in the specified path.')
 	parser.set_defaults(frame=False)
 	parser.set_defaults(trim=False)
 	parser.set_defaults(log2=False)
