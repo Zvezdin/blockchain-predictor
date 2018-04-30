@@ -10,7 +10,7 @@ class PropertyAccountBalanceDistribution(Property):
 	def __init__(self):
 		super().__init__()
 		self.name = "accountBalanceDistribution_log1_2"
-		self.requires = ['tx']
+		self.requires = ['trace']
 		self.requiresHistoricalData  = True
 		self.accounts = {}
 		self.balanceCutoff = 100000000000000000 # -> 0.1ETH
@@ -25,24 +25,26 @@ class PropertyAccountBalanceDistribution(Property):
 		return math.log10(x) / log10_1_2base
 
 	def processTick(self, data):
-		txs = data['tx']
+		traces = data['trace']
 
 		res = np.zeros((self.subPropertyCount, self.tickCount))
 
 		#update our global dictionary of balances
-		for tx in txs.itertuples():
+		for trace in traces.itertuples():
 
-			val = float(tx.value)
+			val = int(trace.value, 0)
 
-			if int(val) != val:
-				raise ValueError("Transaction value of tx %s is not castable to integer!" % str(tx))
-			val = int(val)
-
-			sender = tx._3 #the field is named 'from', but it is renamed to its index in the tuple
+			sender = trace._3 #the field is named 'from', but it is renamed to its index in the tuple
 							#due to it being a python keyword. Beware, this will break if the raw data changes.
-			receiver = tx.to
+			receiver = trace.to
 
-			if receiver not in self.accounts:
+			if isinstance(receiver, float) and math.isnan(receiver):
+						receiver = None #receiver is None when the TX is contract publishing
+
+			if isinstance(sender, float) and math.isnan(sender):
+				sender = None #receiver is None when the TX is contract publishing
+
+			if receiver is not None and receiver not in self.accounts:
 				self.accounts[receiver] = val
 			else:
 				self.accounts[receiver] += val
@@ -50,7 +52,7 @@ class PropertyAccountBalanceDistribution(Property):
 			#updating the balance that way is problematic. Better use max(dict)
 			#self.maxBalance = max(self.accounts[receiver], self.maxBalance)
 
-			if sender in self.accounts:
+			if sender is not None and sender in self.accounts:
 				self.accounts[sender] -= val
 
 				if self.accounts[sender] < 0:
@@ -59,25 +61,29 @@ class PropertyAccountBalanceDistribution(Property):
 				self.accounts[sender] = 0
 
 		if self.maxBalance != 0:
-			for tx in txs.itertuples():
+			for trace in traces.itertuples():
 
-				val = float(tx.value)
-				sender = tx._3
-				receiver = tx.to
+				val = int(trace.value, 0)
+				sender = trace._3
+				receiver = trace.to
 
-				fromBal = 0
-				if self.accounts[sender] > self.balanceCutoff:
-					fromBal = self.scalingFunction(self.accounts[sender] / self.balanceCutoff)
-				toBal = 0
-				if self.accounts[receiver] > self.balanceCutoff:
-					toBal = self.scalingFunction(self.accounts[receiver] / self.balanceCutoff)
+				
+				if not isinstance(sender, float): #if it's not a NaN
+					fromBal = 0
+					if self.accounts[sender] > self.balanceCutoff:
+						fromBal = self.scalingFunction(self.accounts[sender] / self.balanceCutoff)
+					fromI = min(int(fromBal), self.tickCount-1)
 
-				fromI = min(int(fromBal), self.tickCount-1)
-				toI = min(int(toBal), self.tickCount-1)
+					res[1][fromI] += val / self.balanceCutoff #value from in ETH
+					res[2][fromI] += 1 #tx count
 
+				if not isinstance(receiver, float):
+					toBal = 0
+					if self.accounts[receiver] > self.balanceCutoff:
+						toBal = self.scalingFunction(self.accounts[receiver] / self.balanceCutoff)
+					toI = min(int(toBal), self.tickCount-1)
 
-				res[0][toI] += val / self.balanceCutoff #value to in ETH
-				res[1][fromI] += val / self.balanceCutoff #value from in ETH
-				res[2][fromI] += 1 #tx count
+					res[0][toI] += val / self.balanceCutoff #value to in ETH
+				
 
 		return res
