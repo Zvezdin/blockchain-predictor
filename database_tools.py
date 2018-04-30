@@ -209,11 +209,13 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--read', dest='read', action="store_true", help="Load and print the whole symbol.")
 	parser.add_argument('--remove', dest='remove', action="store_true", help="Remove a certain symbol from the database.")
 	parser.add_argument('--removeBlockchain', dest='removeBlockchain', action="store_true", help="Remove all downloaded raw blockchain data.")
+	parser.add_argument('--removeProperties', dest='removeProperties', action="store_true", help="Remove all database records that are NOT the current raw blockchain data.")
 	parser.set_defaults(list=False)
 	parser.set_defaults(peek=False)
 	parser.set_defaults(read=False)
 	parser.set_defaults(remove=False)
 	parser.set_defaults(removeBlockchain=False)
+	parser.set_defaults(removeProperties=False)
 
 
 	args, _ = parser.parse_known_args()
@@ -221,6 +223,16 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	if args.removeBlockchain:
 			for key in dbKeys:
 				removeDB(getChunkstore(), dbKeys[key])
+	elif args.removeProperties:
+		for key in getChunkstore().list_symbols():
+			pas=False
+			for blockKey in dbKeys:
+				#if the key is in our blockchain keys, don't touch it
+				if key == dbKeys[blockKey]:
+					pas=True
+			#remove everything else
+			if not pas:
+				removeDB(getChunkstore(), key)
 
 	elif args.key == None or args.list:
 		print("Available symbols: ", getChunkstore().list_symbols())
