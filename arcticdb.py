@@ -18,7 +18,7 @@ parseToInt = False
 
 tempFilename = 'data/temp.json'
 
-dataDownloaderScript = '--max-old-space-size=32768 data-downloader.js'
+dataDownloaderScript = '--max-old-space-size=8192 data-downloader.js'
 
 chunkStore = db.getChunkstore()
 
@@ -92,7 +92,11 @@ def callDataDownloaderCourse(filename):
 		print("Failed to execute js")
 
 def callDataDownloaderBlockchain(start, count, filename):
-	success = execute_js(dataDownloaderScript, '--blockchain '+str(start)+' '+str(count)+' --filename '+filename)
+	try:
+		success = execute_js(dataDownloaderScript, '--blockchain '+str(start)+' '+str(count)+' --filename '+filename)
+	except OSError:
+		#likely an out-of-memory error. Return and try again later
+		return None
 	if not success:
 		print("Failed to execute js")
 
