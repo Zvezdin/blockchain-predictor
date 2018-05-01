@@ -6,7 +6,7 @@ script/
 #project files
 node_modules/
 log.txt
-data/
+data
 c++/build/
 c++/test*
 debug/*
@@ -36,3 +36,4 @@ time
 pd
 __pycache__/
 .cache/
+.pytest_cache/
