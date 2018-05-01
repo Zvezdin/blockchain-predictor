@@ -125,7 +125,12 @@ module.exports = class Cacher {
 	}
 
 	loadFile(filename, start=undefined, end=undefined) {
-		let obj = jsonUtil.load(this.folder + "/" + filename);
+		let obj;
+		try{
+			obj = jsonUtil.load(this.folder + "/" + filename);
+		} catch (e) {
+			throw new Error("Unable to load file "+filename+" with exception "+e.name);
+		}
 
 		if(start !== undefined || end !== undefined){ //filter by given start or end
 			for(let key in obj) { //for each key ex. block, trace, log, ...
