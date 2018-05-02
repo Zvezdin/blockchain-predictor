@@ -130,8 +130,7 @@ def downloadBlockchain(start=0, targetBlock=None):
 			attempts += 1
 
 			if attempts > attemptsThreshold:
-				print("Too many failed attempts, aborting operation.")
-				return
+				raise RuntimeError("Too many failed data-downloader calls, aborting operation.")
 
 			time.sleep(30 * attempts) #delay before retrying. Most issues are solved that way.
 			continue
@@ -162,8 +161,8 @@ def processRawBlockchainData(data):
 def getLatestBlock():
 	try:
 		tmp = db.getLatestRow(chunkStore, db.dbKeys['block']) #get a dataframe with only the latest row
-		num =  tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
-		
+		num = tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
+
 		return num
 	except:
 		return -1
