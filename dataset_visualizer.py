@@ -4,6 +4,8 @@ import dateutil.parser
 import os, sys
 import os.path
 import time
+import hashlib
+from datetime import datetime as dt
 
 import matplotlib as mpl
 #mpl.use('Agg')
@@ -83,6 +85,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--frame', dest='frame', action='store_true', help='Display single frame values')
 	parser.add_argument('--trim', dest='trim', action='store_true', help='A frame can be trimmed from values on Y=0 and X=end.')
 	parser.add_argument('--log2', dest='log2', action='store_true', help='Scale all account counts by a log2.')
+	parser.add_argument('--at', type=str, default=None, help='Provide a specific timestamp to visualize.')
 	parser.add_argument('--hbar', dest='hbar', action='store_true', help='Position the colorbar horisontally.')
 	parser.add_argument('--renderTimelapse', type=str, default=None, help='Render all frames of a key and save them as a video in the specified path.')
 	parser.set_defaults(frame=False)
@@ -142,7 +145,15 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 				rangeGen = range(len(values))
 				frames = []
 			else:
-				rangeGen = range(len(values)-1, len(values))
+				rangeGenPos = len(values)-1
+				if args.at is not None:
+					for i, date in enumerate(dates):
+						if str(date) == args.at:
+							rangeGenPos = i
+							print("Found your date at position "+str(i))
+						else:
+							print(str(date)+" is not a match")
+				rangeGen = range(rangeGenPos, rangeGenPos+1)
 			for i in rangeGen:
 				val = values[i]
 				print(val.shape)
@@ -166,6 +177,9 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					print(val)
 					print(val.shape)
 					print(date)
+					contents = val.tostring()
+					hashsum = hashlib.sha256(contents).hexdigest()
+					print("Checksum: "+hashsum)
 					plotImage(val, hbar = args.hbar)
 				else:
 					frames.append(val)
