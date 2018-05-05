@@ -64,3 +64,18 @@ def testIterator():
 		vals.append(a[x])
 
 	assert(vals == [5, 4, 3, 1])
+
+def testChanges():
+	a = SortedValueDict(increasing=False)
+	a['two'] = 2
+	a['three'] = 3
+
+	vals = list(a.values())
+	assert(vals == [3, 2])
+
+	a['two'] += 10
+
+	vals = list(a.values())
+	assert(vals == [12, 3])
+
+
