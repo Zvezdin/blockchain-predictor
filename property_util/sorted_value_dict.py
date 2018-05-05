@@ -12,5 +12,6 @@ class SortedValueDict(sorteddict):
 		super().__init__(self.__dctcmp)
 
 	def __setitem__(self, key, val):
+		super().pop(key, None)
 		self.dct[key] = val if self.increasing else -val
 		super().__setitem__(key, val)
