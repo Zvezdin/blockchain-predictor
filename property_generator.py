@@ -15,6 +15,7 @@ import database_tools as db
 
 #include the properties from their respectible folder
 sys.path.insert(0, os.path.realpath('properties'))
+sys.path.insert(0, os.path.realpath('property_util'))
 
 from property import Property
 from propertyAccountBalanceDistribution import PropertyAccountBalanceDistribution
@@ -34,6 +35,7 @@ from propertyNetworkHashrate import PropertyNetworkHashrate
 from propertyOpenPrice import PropertyOpenPrice
 #from propertyQuoteVolume import PropertyQuoteVolume
 from propertyStickPrice import PropertyStickPrice
+from propertyTraceProperties import PropertyTraceProperties
 from propertyTransactionCount import PropertyTransactionCount
 from propertyUniqueAccounts import PropertyUniqueAccounts
 #from propertyVolume import PropertyVolume
@@ -41,25 +43,25 @@ from propertyVolumeFrom import PropertyVolumeFrom
 from propertyVolumeTo import PropertyVolumeTo
 #from propertyWeightedAverage import PropertyWeightedAverage
 
+from blockchain_state import state
+
 chunkStore = db.getChunkstore()
 
 
 globalProperties = [PropertyAccountBalanceDistribution(), PropertyBalanceLastSeenDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(),
 PropertyContractBalanceLastSeenDistribution(), PropertyContractVolumeInERC20Distribution(), PropertyGasLimit(), PropertyGasPrice(),
 PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(),
-PropertyStickPrice(), PropertyTransactionCount(), PropertyUniqueAccounts(), PropertyVolumeFrom(), PropertyVolumeTo()]
+PropertyStickPrice(), PropertyTraceProperties(), PropertyTransactionCount(), PropertyUniqueAccounts(), PropertyVolumeFrom(), PropertyVolumeTo()]
 
 propChunkSize = 'M'
 
 debug = False
 
 
-def generateProperties(selectedProperties = None, start = None, end = None, relative = False):
+def generateProperties(selectedProperties = None, start = None, end = None, relative = False, force = False):
 	values = {} #a dict that holds an array of the returned values for each property
 
-	dub = {} #temp dict to make sure, that we won't have dubbed requirements
-
-	requirements = []
+	reqList = []
 
 	properties = []
 
@@ -73,7 +75,8 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 			return
 	else: properties = globalProperties
 
-	print("Working with properties:", properties)
+	usingState = False
+	historicalData = False
 
 	for prop in properties:
 
@@ -82,11 +85,27 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 		else:
 			for name in prop.provides:
 				values[name] = []
-		for req in prop.requires:
-			if not req in dub:
-				dub[req] = True
-				requirements.append(req)
-	print("Requirements are:", requirements)
+
+		reqList += prop.requires
+		if prop.requiresState and not usingState:
+			usingState = True
+			reqList += state.requires
+		
+		if prop.requiresHistoricalData:
+			historicalData = True
+
+	if usingState:
+		historicalData = True
+
+	if historicalData and start is not None and not force:
+		raise ValueError("The selected properties require all historical data, yet a start was given as an argument.")
+
+	#remove dublicate entries
+	reqList = list(set(reqList))
+
+	print("Working with properties:", properties, "" if not usingState else "and using state.")
+
+	print("Requirements are:", reqList)
 
 	def tickHandler(data, date):
 		for prop in properties:
@@ -102,7 +121,7 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 				values[prop.name].append({'date': date, prop.name: val})
 
 	try:
-		forEachTick(tickHandler, db.dbKeys['tick'], requirements, start=start, end=end)
+		forEachTick(tickHandler, db.dbKeys['tick'], reqList, start=start, end=end, usingState=usingState)
 		print("Finished generating property values.")
 	except KeyboardInterrupt:
 		print("Got interrupted, saving the current progress...")
@@ -150,7 +169,7 @@ def saveProperty(name, val, quiet = False):
 
 	db.saveData(chunkStore, name, val2, propChunkSize)
 
-def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
+def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usingState=False):
 	#get the time interval where we have all needed data
 	start, end = db.getMasterInterval(chunkStore, db.dbKeys.values(), start, end)
 
@@ -200,13 +219,22 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1):
 					print("Loading new chunk for key" , key, tickData[key].head(2), tickData[key].tail(2), data[key].head(2), data[key].tail(2), currentStart, currentEnd)
 					print("Processing of the chunk took "+str(time.time() - startTime)+"s.")
 					startTime = time.time()
-					data[key] = decodeRawData(next(iterators[key])) #load another data chunk and append it
+
+					try:
+						data[key] = decodeRawData(next(iterators[key])) #load another data chunk and append it
+					except:
+						#in case our connection to our database is dropped for a random reason
+						#simulate that a user has cancelled the operation so that we'll save the progress up until now
+						raise KeyboardInterrupt()
+
 					newPart = subsetByDate(data[key], currentStart, currentEnd)
 					tickData[key] = pd.concat([tickData[key], newPart])
 				if debug:
 					print(tickData[key].head(2))
 					print(tickData[key].tail(2))
 
+			if usingState:
+				state.processTick(tickData)
 			callback(tickData, currentEnd)
 
 def modifiedProperty(valuesDict, name, newName, transformFunction):
@@ -299,13 +327,11 @@ def futureMaxMinValues(values, periods=10, minValues=False):
 
 			if(minValues):
 				if not isinstance(subset[0], np.ndarray):
-					print(type(subset[0]))
 					val = min(subset)
 				else:
 					val = np.array(subset).min(0)
 			else:
 				if not isinstance(subset[0], np.ndarray):
-					print(type(subset[0]))
 					val = max(subset)
 				else:
 					val = np.array(subset).max(0)
@@ -338,6 +364,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--list', dest='list', action="store_true", help="List the available properties that can be generated.")
 	parser.set_defaults(list=False)
+	parser.add_argument('--force', dest='force', action="store_true", help="Shut up and 'sudo do_the_job'.")
+	parser.set_defaults(force=False)
 	parser.add_argument('--relative', dest='relative', action="store_true", help="Generate the properties with relative values.")
 	parser.set_defaults(relative=False)
 
@@ -349,7 +377,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 	properties = args.properties.split(',') if args.properties != None  else None
 
 	if args.action == 'generate':
-		generateProperties(properties, start, end, args.relative)
+		generateProperties(selectedProperties=properties, start=start, end=end, relative=args.relative, force=args.force)
 	elif args.action == 'remove':
 		if properties == None:
 			properties = [prop.name for prop in globalProperties if prop.provides == None]
@@ -368,4 +396,4 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		for prop in properties:
 			db.removeDB(chunkStore, prop)
 	elif args.action == None or args.list:
-		print("Available properties:", [prop.name for prop in globalProperties])
+		print("Available properties:", str.join(',', [prop.name for prop in globalProperties]))
