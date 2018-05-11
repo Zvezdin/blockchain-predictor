@@ -160,6 +160,9 @@ class PropertyAccountNumberDistribution(Property):
 							newContract = False
 							if trace.type == 'create':
 								#if this contract has been created, mark it so we know it's a contract
+								if receiver is None:
+									print("Something is horribly wrong!")
+									assert(False)
 								self.contracts[receiver] = True
 								newContract = True
 
@@ -172,7 +175,7 @@ class PropertyAccountNumberDistribution(Property):
 							elif feature == 'contractInVolume':
 								if receiver in self.contracts:
 									inVolume.setdefault(receiver, 0)
-									inVolume[receiver] += + val
+									inVolume[receiver] += val
 
 							elif feature == 'contractOutVolume':
 								if sender in self.contracts:
