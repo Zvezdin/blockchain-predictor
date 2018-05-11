@@ -2,20 +2,27 @@ import math
 import sys, os
 sys.path.insert(0, os.path.realpath('./properties'))
 
-from sorted_value_dict import SortedValueDict
+from time import time as now
+from collections import deque
+
+#from sorted_value_dict import SortedValueDict
+SortedValueDict=dict #temp debug
 
 from property import Property
 
 class BlockchainState(Property):
 	def __init__(self):
+		self.requires = ['trace']#, 'tx', 'log']
+		self.requiresHistoricalData  = True
+
 		self._init_state()
 		self._clear_state()
 
 	def _init_state(self):
 		self.recentLengthDays = 3
 		self.recentLength = self.recentLengthDays*86400 # 3 days in seconds
-		self.topXFraction = 0.0001
-		self.topUsedFraction = 0.0001
+		self.topXFraction = 0.000005
+		self.topUsedFraction = 0.000005
 
 		self.initialSupply = 72_000_000 * 1000000000000000000 #72M ETH in wei. The ETH created at genesis
 
@@ -30,19 +37,24 @@ class BlockchainState(Property):
 		self.isContract = {}
 
 		#balance lookup
-		self.balances = SortedValueDict()
+		self.balances = {}
 
 		#amount of transactions this acc participates in
-		self.timesUsed = SortedValueDict()
+		self.timesUsed = {}
 
 		#total accs
 		self.totalAccountsAmount = 0
 
-		#ordered dict address -> timestamp (date of creation)
-		self.dateCreated = SortedValueDict()
+		#recently active/created accounts.
+		#We push to the front the most recent accounts and pop from the back the older ones
+		#self.recentlyActive = deque()
+		#self.isRecentlyActive = {}
+		self.recentlyCreated = deque()
+		self.isRecentlyCreated = {}
 
-		#ordered dict address -> timestamp (date of last activity)
-		self.dateActive = SortedValueDict()
+		#dicts to hold account timestamps. Used when calculating recently active/created
+		self.dateCreated = {}
+		#self.dateActive = {}
 
 		#in order ETHRecentlyExchanged to be calculated, we'll keep a list of the past x hours, each element being
 		#the amount of ETH exchanged within that hour. Then our variable will be the sum of that list
@@ -52,6 +64,10 @@ class BlockchainState(Property):
 	#clears everything that has to be cleared for every processTick call
 	def _clear_state(self):
 		#TOP IN BALANCE/USED GLOBAL/LOCAL CONTRACTS/ACCOUNTS LIST/MAP
+
+
+		#IS TOP X FROM THE ACTIVE ACCOUNTS
+		#THIS IS THE ONLY WAY
 
 		#top x% lookup (list & map)
 		self.isTopX = {}
@@ -106,51 +122,63 @@ class BlockchainState(Property):
 		self.localTracesOf = {}
 		self.localLogsOf = {}
 
+		# tx hash -> true/undefined whether this transaction exists
+		self.isTransaction = {}
+
+		#block N -> bool
+		self.isBlock = {}
+
+		#address -> gas used total in this period
+		self.gasUsedBy = {}
+
 		#address -> amount and list of sent/received in this period
 		self.amountSentBy = {}
 		self.senders = []
 		self.amountReceivedBy = {}
 		self.receivers = []
 
-
-		#accounts active in last x days lookup
-		self.recentlyActive = []
-		self.isRecentlyActive = {}
-
-
-		#address -> bool if this address is created within last x ticks
-		self.isRecentlyCreated = {}
-
 		#active accs
-		self.activeAccountsAmount = 0
-
-		#list/map of active accounts/contracts
-		self.activeAccounts = []
-		self.isActiveAccount = {}
+		self.localAccountsAmount = 0
 
 		#amount of ETH that has been recently exchanged
 		self.ETHRecentlyExchanged = 0
+
+		#time of last block
+		self.lastTimestamp = 0
 
 #TODO: Avg bal of just created accs (avg value of first tx to acc?)
 #TODO: when working with ETH, also have a USD version of the same property
 
 	def processTick(self, data):
+		t = now()
 		self._clear_state()
+		print("Clear state took %4fs" % (now() - t))
 
 		ethExchanged = 0
 
 		if 'trace' in data:
-			for trace in data['trace']:
+			t = now()
+			for trace in data['trace'].itertuples():
 				sender = trace._3
 				receiver = trace.to
 
 				sender = self.noneIfInf(sender)
 				receiver = self.noneIfInf(receiver)
-				
+
 				value = int(trace.value, 0)
+
+				gasUsed = self.noneIfInf(trace.gasUsed)
+				if gasUsed is not None:
+					gasUsed = int(trace.gasUsed, 0)
 				timestamp = trace.date.value // 10**9 #EPOCH time
 
 				ethExchanged += value
+
+				self.isTransaction[trace.transactionHash] = True
+				self.isBlock[trace.blockNumber] = True
+
+				if gasUsed is not None:
+					self.gasUsedBy[sender] = self.gasUsedBy.get(sender, 0) + gasUsed
 
 				if trace.type == 'create':
 					assert(receiver not in self.isContract)
@@ -168,6 +196,7 @@ class BlockchainState(Property):
 					if acc not in self.balances:
 						self.totalAccountsAmount += 1
 						self.dateCreated[acc] = timestamp
+						self.recentlyCreated.appendleft(acc)
 						self.balances[acc] = 0
 						self.timesUsed[acc] = 0
 						self.isAccountNew[acc] = True
@@ -192,11 +221,6 @@ class BlockchainState(Property):
 							self.amountReceivedBy[acc] = 0
 							self.receivers.append(acc)
 						self.amountReceivedBy[acc] += value
-					
-					#update active accounts
-					if acc not in self.isActiveAccount:
-						self.isActiveAccount[acc] = True
-						self.activeAccounts.append(acc)
 
 					#update local accounts
 					if acc not in self.isLocalAccount:
@@ -209,62 +233,89 @@ class BlockchainState(Property):
 					self.localTimesUsed.setdefault(acc, 0)
 					self.localTimesUsed[acc] += 1
 
-					assert(self.dateActive.get(acc, 0) <= timestamp)
-					self.dateActive[acc] = timestamp
+					#update active times
+					#lastActive = self.dateActive.get(acc, 0)
+					#assert(lastActive <= timestamp)
+					#if lastActive < timestamp:
+					#	self.dateActive[acc] = timestamp
+					#	self.recentlyActive.push_left(acc)
+
+					assert(self.lastTimestamp <= timestamp)
+					self.lastTimestamp = timestamp
+
+			print("Replaying traces took %4fs" % (now() - t))
+
 		if 'tx' in data:
-			for tx in data['tx']:
-				sender = self.noneIfInf(tx._3)
+			t = now()
+			for tx in data['tx'].itertuples():
+				sender = self.noneIfInf(tx._4)
 
 				if sender is not None:
 					self.localTransactionsOf.setdefault(sender, [])
 					self.localTransactionsOf[sender].append(tx)
+			print("Iterating TXs took %4fs" % (now() - t))
 		if 'log' in data:
-			for log in data['log']:
+			t = now()
+			for log in data['log'].itertuples():
 				adr = self.noneIfInf(log.address)
 
 				if adr is not None:
 					self.localLogsOf.setdefault(adr, [])
 					self.localLogsOf[adr].append(log)
-		self.activeAccountsAmount = len(self.activeAccounts)
+			print("Iterating logs took %4fs" % (now() - t))
 
-		#update statistics about recent accounts
-		recentlyCreated = self.getRecentRecords(self.dateCreated, self.recentLength)
-		self.isRecentlyCreated = self.listToTrueDict(recentlyCreated)
+		t = now()
 
-		self.recentlyActive = self.getRecentRecords(self.dateActive, self.recentLength)
-		self.isRecentlyActive = self.listToTrueDict(self.recentlyActive)
+		self.localAccountsAmount = len(self.localAccounts)
 	
+		print("Getting recent records took %4fs" % (now() - t))
+		t = now()
+
 		#update local balances
 		for acc in self.localAccounts:
 			val = self.balances[acc]
 			self.localBalances[acc] = val
 			self.localTotalETH += val
-	
-		#update global top statistics
-		self.topX = self.getTopRecords(self.balances, self.topXFraction, self.totalETH)
-		self.isTopX = self.listToTrueDict(self.topX)
-		print("Amount of topX: "+len(self.topX))
-		
-		self.contractTopX = self.getTopRecords(self.balances, self.topXFraction, self.totalETH, restrictorDict=self.isContract)
-		self.isContractTopX = self.listToTrueDict(self.contractTopX)
 
-		self.localTopX = self.getTopRecords(self.localBalances, self.topXFraction, self.localTotalETH)
-		self.isLocalTopX = self.listToTrueDict(self.localTopX)
+			#update top records
+			#TODO: Hold the previous top records and remove the no-longer top records before proceeding
+			#maybe by having a sorted dict and remove the last ones or just sort and remove?
+			if self.isTop(self.balances[acc], self.topXFraction, self.totalETH):
+				if self.isContract.get(acc, False):
+					self.isContractTopX[acc] = True
+					self.contractTopX.append(acc)
+				else:
+					self.isTopX[acc] = True
+					self.topX.append(acc)
+			if self.isTop(self.balances[acc], self.topXFraction, self.localTotalETH):
+				if self.isContract.get(acc, False):
+					self.isContractLocalTopX[acc] = True
+					self.contractLocalTopX.append(acc)
+				else:
+					self.isLocalTopX[acc] = True
+					self.localTopX.append(acc)
+			if self.isTop(self.timesUsed[acc], self.topUsedFraction, self.totalTimesUsed):
+				if self.isContract.get(acc, False):
+					self.isContractTopUsed[acc] = True
+					self.contractTopUsed.append(acc)
+				else:
+					self.isTopUsed[acc] = True
+					self.topUsed.append(acc)
+			if self.isTop(self.timesUsed[acc], self.topUsedFraction, self.localTotalTimesUsed):
+				if self.isContract.get(acc, False):
+					self.isContractLocalTopUsed[acc] = True
+					self.contractLocalTopUsed.append(acc)
+				else:
+					self.isLocalTopUsed[acc] = True
+					self.localTopUsed.append(acc)
 
-		self.contractLocalTopX = self.getTopRecords(self.localBalances, self.topXFraction, self.localTotalETH, restrictorDict=self.isContract)
-		self.isContractLocalTopX = self.listToTrueDict(self.contractLocalTopX)
+		print("Local balance iteration took %4fs" % (now() - t))
 
-		self.topUsed = self.getTopRecords(self.timesUsed, self.topUsedFraction, self.totalTimesUsed)
-		self.isTopUsed = self.listToTrueDict(self.topUsed)
+		t = now()
 
-		self.contractTopUsed = self.getTopRecords(self.timesUsed, self.topUsedFraction, self.totalTimesUsed, restrictorDict=self.isContract)
-		self.isContractTopUsed = self.listToTrueDict(self.contractTopUsed)
-
-		self.localTopUsed = self.getTopRecords(self.localTimesUsed, self.topUsedFraction, self.localTotalTimesUsed)
-		self.isLocalTopUsed = self.listToTrueDict(self.localTopUsed)
-
-		self.contractLocalTopUsed = self.getTopRecords(self.localTimesUsed, self.topUsedFraction, self.localTotalTimesUsed, restrictorDict=self.isContract)
-		self.isContractLocalTopUsed = self.listToTrueDict(self.contractLocalTopUsed)
+		#update recently created by removing the last part of accounts
+		self.recentlyCreated = self.removeOldDequeRecords(self.recentlyCreated, self.lastTimestamp - self.recentLength, self.dateCreated)
+		self.isRecentlyCreated = self.listToTrueDict(self.recentlyCreated)
 
 		#updated recent ETH exchanged
 		# remove the oldest tick and append the latest one
@@ -272,10 +323,27 @@ class BlockchainState(Property):
 		self.ETHRecentlyExchangedList.insert(0, ethExchanged)
 		self.ETHRecentlyExchanged = sum(self.ETHRecentlyExchangedList)
 
+		self.printDebug()
+
+		print("Debug & recently exchanged took %4fs" % (now() - t))
+
 	def noneIfInf(self, a):
 		if isinstance(a, float) and math.isnan(a):
 			return None
 		return a
+
+	def removeOldDequeRecords(self, dq, minVal, valDict=None):
+		#the dq should be ordered largest -> smallest values
+		while dq:
+			val = dq.pop()
+			if valDict is not None:
+				valCmp = valDict[val]
+			else:
+				valCmp = val
+
+			if valCmp >= minVal:
+				dq.append(val)
+				return dq
 
 	def getRecentRecords(self, dct, interval, currentTime=None):
 		target = None
@@ -300,6 +368,11 @@ class BlockchainState(Property):
 
 		return res
 
+	def isTop(self, value, fraction, total):
+		minTarget = total * fraction
+
+		return value >= minTarget
+
 	def getTopRecords(self, dct, fraction, total, restrictorDict=None, inverseRestriction=False):
 		#we should return all records with values higher than min target
 		minTarget = total * fraction
@@ -315,7 +388,7 @@ class BlockchainState(Property):
 			else:
 				break
 
-			assert(prevVal is None or val <= prevVal)
+			#assert(prevVal is None or val <= prevVal)
 			prevVal = val
 
 		return res
@@ -328,6 +401,29 @@ class BlockchainState(Property):
 			dct[el] = True
 		
 		return dct
+
+	def printDebug(self):
+		print("Amount of topX: %d" % len(self.topX))
+		print("Amount of topX contracts: %d" % len(self.contractTopX))
+		print("Amount of local topX: %d" % len(self.localTopX))
+		print("Amount of local topX contracts: %d" % len(self.contractLocalTopX))
+		print("Amount of top used: %d" % len(self.topUsed))
+		print("Amount of contract top used: %d" % len(self.contractTopUsed))
+		print("Amount of local top used: %d" % len(self.localTopUsed))
+		print("Amount of contract local top used: %d" % len(self.contractLocalTopUsed))
+		print("ETH recently exchanged: %d" % self.ETHRecentlyExchanged)
+		#print("Recently active accounts: %d" % len(self.recentlyActive))
+		print("Recently created accounts: %d" % len(self.recentlyCreated))
+
+		if self.localAccountsAmount > 0:
+			print("Senders %d, with sent val of first being %d" % (len(self.senders), self.amountSentBy[self.senders[0]]))
+			print("Receivers %d, with received val of first being %d" % (len(self.receivers), self.amountReceivedBy[self.receivers[0]]))
+			acc = self.localAccounts[0]
+			print("Local accounts %d, traces from first account %d, logs %d and TXs %d" % (len(self.localAccounts), len(self.localTracesOf.get(acc, [])), \
+			len(self.localLogsOf.get(acc, [])), len(self.localTransactionsOf.get(acc, [])) ))
+		print("%d new accounts and %d new contracts" % (len(self.newAccounts), len(self.newContracts)))
+		print("%d times locally used and %d total local balance" % (self.localTotalTimesUsed, self.localTotalETH))
+		print("%d total accounts, %d total times used and %d total ETH" % (self.totalAccountsAmount, self.totalTimesUsed, self.totalETH))
 
 #singleton
 state = BlockchainState()
