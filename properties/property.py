@@ -13,6 +13,8 @@ class Property(abc.ABC):
 
 		#What kind of data it requires. 'block', 'tx' or 'tick' for example
 		self.requires = []
+		#If this property will request data from the blockchain_state helper property
+		self.requiresState = False
 		#If the generated properties can be turned relative. True if value is already relative
 		self.isRelative = False
 
