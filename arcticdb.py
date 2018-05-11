@@ -18,7 +18,7 @@ parseToInt = False
 
 tempFilename = 'data/temp.json'
 
-dataDownloaderScript = '--max-old-space-size=8192 data-downloader.js'
+dataDownloaderScript = '--max-old-space-size=16384 data-downloader.js'
 
 chunkStore = db.getChunkstore()
 
