@@ -149,7 +149,7 @@ def getFirstRow(lib, key, filter = True):
 	firstDate = lib.read_metadata(key)['start']
 	return loadData(lib, key, None, firstDate, filter)
 
-def loadData(lib, key, startDate, endDate, filter, interval = CLOSED_CLOSED):
+def loadData(lib, key, startDate = None, endDate = None, filter = True, interval = CLOSED_CLOSED):
 	return lib.read(key, chunk_range = DateRange(startDate, endDate, interval), filter_data = filter)
 
 def loadMetadata(lib, key):
