@@ -235,7 +235,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 				removeDB(getChunkstore(), key)
 
 	elif args.key == None or args.list:
-		print("Available symbols: ", getChunkstore().list_symbols())
+		print("Available symbols: ", str.join(',', getChunkstore().list_symbols()))
 	else:
 		if args.peek:
 			try:
