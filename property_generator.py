@@ -350,6 +350,16 @@ def subsetByDate(data, start, end):
 	"""Function that takes in a DataFrame and start and end dates, returning the subset of the frame with these dates"""
 	return data[(data.date > start) & (data.date <= end)]
 
+def isProperty(key):
+	"""Checks whether the given database key belongs to a property or not."""
+	for prop in globalProperties:
+		if key == prop.name:
+			return True #TODO: What about property modifiers, like _rel, _sma, _10max?
+		if prop.provides is not None:
+			if key in prop.provides:
+				return True
+	return False
+
 def containsFullInterval(data, subset, end):
 	#if, for some reason, the subsetted data is empty, check only the intervals
 	if len(subset) == 0: return (data.iloc[len(data)-1].date >= end)
