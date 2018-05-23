@@ -12,8 +12,12 @@ keras = "*"
 sklearn = "*"
 blist = "*"
 arctic = {git = "https://github.com/manahl/arctic.git", editable = true}
+pandas = "*"
+pillow = "*"
+tensorflow-gpu = "*"
 
 [dev-packages]
+ipython = "*"
 
 [requires]
 python_version = "3.6"
