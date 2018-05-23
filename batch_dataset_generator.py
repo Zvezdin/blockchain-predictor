@@ -67,18 +67,7 @@ def run(group, folder):
 
 								width = widths.get(distributionStr, None)
 
-								preprocess={}
-
-								if 'distribution' in distributionStr: #do not preprocess simple vlaues
-									if type(distribution) == list:
-										for distr in distribution:
-											slice_ = slices.get(distr, [':', '1:'])
-											preprocessElement = {'scale': 'log2', 'slices': slice_}
-											preprocess[distr] = preprocessElement
-									else:
-										slice_ = slices.get(distribution, [':', '1:'])
-										preprocessElement = {'scale': 'log2', 'slices': slice_}
-										preprocess[distribution] = preprocessElement
+								preprocess = getPreprocessDict(distribution)
 								
 								gen.run(model, distribution, target.split(','), filename, start=dt(2017,3,1), end=None, ratio=[1,6,1], shuffle=False,\
 								args={'window': window, 'normalization': {}, 'defaultNormalization': 'auto', 'blacklistTarget': True, 'width': width,\
@@ -101,10 +90,43 @@ def run(group, folder):
 				gen.run('matrix', arg['target']+','+arg['prop'], '2017-03-01', None, filename, 'full', '1:6:1', False,\
 				{'window': 104, 'target': [arg['target']], 'normalization': {}, 'defaultNormalization': 'auto', 'blacklistTarget': arg['blacklistTarget'],\
 				'normalizationLevel': 'property', 'normalizationStd': 'global'}, arg['preprocessor'])
+	elif group == 'new':
+		args = []
+		newProps = 'traceTx,traceBl,topXCount,volumeLeavingTopX,volumeEnteringTopX,avgGasByTopX,avgVal,avgValToTopX,avgValFromTopX,avgValToNew,avgValFromRecent,tracesFromRecent,shareTracesFromRecent,gasUsedByNew,avgGasUsed,avgBalOfRecent,avgBalOfLocal,avgBalOfRecent,activeAccounts,activeAccountsShare,recentAccounts'.split(',')
+		args.append({'prop': newProps, 'target': 'highPrice', 'defaultNormalization': 'auto', 'model': 'matrix'})
+		args.append({'prop': ['accountBalanceDistribution_log1_2,']+newProps, 'target': 'highPrice', 'defaultNormalization': 'auto', 'model': 'matrix'})
+		args.append({'prop': ['balanceLastSeenDistribution_log1_2']+newProps, 'target': 'highPrice', 'defaultNormalization': 'auto', 'model': 'stacked'})
+		
+		for i, arg in enumerate(args):
+			filename = directory + str(i+1) + '_new' + '.pickle'
+			if not os.path.exists(filename): #no need to waste writes if already written
+				print("Generating dataset %s." % filename)
+				
+				props = arg['target']+','+arg['prop']
+
+				preprocess = getPreprocessDict(props)
+
+				gen.run(arg['model'], str.join(',', props), start='2017-03-01', end=None, filename, 'full', ratio='1:6:1', shuffle=False,\
+				{'window': 24, 'target': [arg['target']], 'normalization': {}, 'defaultNormalization': arg['defaultNormalization'], 'blacklistTarget': True,\
+				'normalizationLevel': 'property', 'normalizationStd': 'global'}, preprocess=preprocess)
+
+def getPreprocessDict(prop):
+	if not isinstance(prop, list):
+		prop = [prop]
+
+	preprocess = {}
+
+	for p in prop:
+		if 'distribution' in p: #do not preprocess simple vlaues
+				slice_ = slices.get(distribution, [':', '1:'])
+				preprocessElement = {'scale': 'log2', 'slices': slice_}
+				preprocess[p] = preprocessElement
+	
+	return preprocess
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Automatically generates a group of datasets with predefined parameters.")
-	parser.add_argument('group', type=str, choices=['distributions', 'experiments'], help='The name of the dataset group to be generated.')
+	parser.add_argument('group', type=str, choices=['distributions', 'experiments', 'new'], help='The name of the dataset group to be generated.')
 	parser.add_argument('--filepath', type=str, default='data/', help="The save location for the datasets. \
 	A subfolder will be created there with the name of the dataset group.")
 	args, _ = parser.parse_known_args()
