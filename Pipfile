@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+naked = "*"
+pytest = "*"
+regex = "*"
+matplotlib = "*"
+keras = "*"
+sklearn = "*"
+blist = "*"
+arctic = {git = "https://github.com/manahl/arctic.git", editable = true}
+
+[dev-packages]
+
+[requires]
+python_version = "3.6"
