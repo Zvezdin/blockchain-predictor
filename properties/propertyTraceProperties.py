@@ -7,7 +7,7 @@ from blockchain_state import state
 from movingAverages import average
 from movingAverages import Average
 
-from property import Property
+from .property import Property
 
 class PropertyTraceProperties(Property):
 	def __init__(self):

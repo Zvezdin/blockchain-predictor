@@ -1,4 +1,4 @@
-from propertyAccountNumberDistribution import PropertyAccountNumberDistribution
+from .propertyAccountNumberDistribution import PropertyAccountNumberDistribution
 
 import math
 import sys

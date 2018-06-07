@@ -1,4 +1,4 @@
-from property import Property
+from .property import Property
 
 class PropertyVolumeTo(Property):
 	def __init__(self):

@@ -1,4 +1,4 @@
-from property import Property
+from .property import Property
 
 class PropertyLowPrice(Property):
 	def __init__(self):
