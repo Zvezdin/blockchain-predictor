@@ -6,54 +6,18 @@ import time
 import dateutil.parser
 import argparse
 import traceback
+import inspect
 
 import pandas as pd
 from arctic.date import DateRange
 import numpy as np
 
-import database_tools as db
+import properties.properties #this module contains all the property classes
+from property_util import state
+from database import instance as db
 
-#include the properties from their respectible folder
-sys.path.insert(0, os.path.realpath('properties'))
-sys.path.insert(0, os.path.realpath('property_util'))
-
-from property import Property
-from propertyAccountBalanceDistribution import PropertyAccountBalanceDistribution
-from propertyAccountNumberDistribution import PropertyAccountNumberDistribution
-from propertyBalanceLastSeenDistribution import PropertyBalanceLastSeenDistribution
-from propertyBlockDifficulty import PropertyBlockDifficulty
-from propertyBlockSize import PropertyBlockSize
-from propertyClosePrice import PropertyClosePrice
-from propertyContractBalanceLastSeenDistribution import PropertyContractBalanceLastSeenDistribution
-from propertyContractVolumeInERC20Distribution import PropertyContractVolumeInERC20Distribution
-from propertyGasLimit import PropertyGasLimit
-from propertyGasPrice import PropertyGasPrice
-from propertyGasUsed import PropertyGasUsed
-from propertyHighPrice import PropertyHighPrice
-from propertyLowPrice import PropertyLowPrice
-from propertyNetworkHashrate import PropertyNetworkHashrate
-from propertyOpenPrice import PropertyOpenPrice
-#from propertyQuoteVolume import PropertyQuoteVolume
-from propertyStickPrice import PropertyStickPrice
-from propertyTraceProperties import PropertyTraceProperties
-from propertyTransactionCount import PropertyTransactionCount
-from propertyUniqueAccounts import PropertyUniqueAccounts
-#from propertyVolume import PropertyVolume
-from propertyVolumeFrom import PropertyVolumeFrom
-from propertyVolumeTo import PropertyVolumeTo
-#from propertyWeightedAverage import PropertyWeightedAverage
-
-from blockchain_state import state
-
-chunkStore = db.getChunkstore()
-
-
-globalProperties = [PropertyAccountBalanceDistribution(), PropertyBalanceLastSeenDistribution(), PropertyBlockDifficulty(), PropertyBlockSize(), PropertyClosePrice(),
-PropertyContractBalanceLastSeenDistribution(), PropertyContractVolumeInERC20Distribution(), PropertyGasLimit(), PropertyGasPrice(),
-PropertyGasUsed(), PropertyHighPrice(), PropertyLowPrice(), PropertyNetworkHashrate(), PropertyOpenPrice(),
-PropertyStickPrice(), PropertyTraceProperties(), PropertyTransactionCount(), PropertyUniqueAccounts(), PropertyVolumeFrom(), PropertyVolumeTo()]
-
-propChunkSize = 'M'
+propertyClasses = [x[1] for x in inspect.getmembers(properties.properties, inspect.isclass)] #get the classes
+globalProperties = [clas() for clas in propertyClasses]
 
 debug = False
 
@@ -121,7 +85,7 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 				values[prop.name].append({'date': date, prop.name: val})
 
 	try:
-		forEachTick(tickHandler, db.dbKeys['tick'], reqList, start=start, end=end, usingState=usingState)
+		forEachTick(tickHandler, 'tick', reqList, start=start, end=end, usingState=usingState)
 		print("Finished generating property values.")
 	except KeyboardInterrupt:
 		print("Got interrupted, saving the current progress...")
@@ -148,7 +112,9 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 	#save the raw property values
 	for prop in values.keys():
 		try:
-			saveProperty(prop, values[prop])
+			if values[prop]: #sma / ema and other modifiers may not be available
+				#if we've generated values for too fewer ticks
+				saveProperty(prop, values[prop])
 		except ValueError as e:
 			print("Failed saving property!", e, traceback.format_exc())
 
@@ -158,53 +124,57 @@ def saveProperty(name, val, quiet = False):
 	for v in val:
 		v2 = v.copy() #avoid changing the actual values
 
-		if type(v2[name]) == np.ndarray:
-			v2[name] = db.encodeObject(v2[name]) #encode due to DB limitations
 		val2.append(v2)
 
+	df = pd.DataFrame(val2)
+	print(df)
+	df.set_index('date', inplace=True)
+
 	if not quiet:
-		df = db.getDataFrame(val2)
 		print("Saving prop " + name+ " with values ", df.head(5), df.tail(5))
 		print("With byte size:", sys.getsizeof(df))
 
-	db.saveData(chunkStore, name, val2, propChunkSize)
+	db.save(name, df)
 
 def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usingState=False):
 	#get the time interval where we have all needed data
-	start, end = db.getMasterInterval(chunkStore, db.dbKeys.values(), start, end)
+	start, end = db.getMasterInterval(['tick', 'block'], start, end) #TODO REMOVE DEBUG
 
 	print("Starting generating properties from", start, "to", end)
 
 	lastEnd = None
 
-	mainData = chunkStore.read(mainKey, chunk_range=DateRange(start, end))
+	mainData = db.get(mainKey, start=start, end=end)
 
 	if debug: print("Loaded mainData:", mainData)
 
 	iterators = {}
 
-	for key in db.dbKeys: #for each key (not value) that we store in the dbKeys
-		if dataKeys and key not in dataKeys: continue
-		iterators[key] = chunkStore.iterator(db.dbKeys[key], chunk_range=DateRange(start, end))
+	for key in db.timeseries: #for each key (not value) that we store in the dbKeys
+		if dataKeys and key not in dataKeys:
+			continue
+		iterators[key] = db.get(key, start=start, end=end, iterator=True)
 		print("Working with requested data", key)
 
 	data = {}#[next(iterators[i]) for i in range(len(iterators))]
 
 	for key in iterators: # load the first chunks for all data
-		data[key] = decodeRawData(next(iterators[key]))
+		data[key] = next(iterators[key])
 
 	startTime = time.time()
 
 	for mainRow in mainData.iterrows():
 		rowData = mainRow[1]
 
-		if rowData.date < start or rowData.date > end: continue #we don't want to be doing anything outside of our main interval
+		rowDate = rowData.name
 
-		if lastEnd is None: lastEnd = rowData.date #if this is the first row we read
+		if rowDate < start or rowDate > end: continue #we don't want to be doing anything outside of our main interval
+
+		if lastEnd is None: lastEnd = rowDate #if this is the first row we read
 		else:
-			#our interval is > lastEnd and <= rowData.date
+			#our interval is > lastEnd and <= rowDate
 			currentStart = lastEnd
-			currentEnd = rowData.date
+			currentEnd = rowDate
 			lastEnd = currentEnd
 
 			#print("Loading data for dates", currentStart, currentEnd)
@@ -221,7 +191,7 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usin
 					startTime = time.time()
 
 					try:
-						data[key] = decodeRawData(next(iterators[key])) #load another data chunk and append it
+						data[key] = next(iterators[key]) #load another data chunk and append it
 					except:
 						#in case our connection to our database is dropped for a random reason
 						#simulate that a user has cancelled the operation so that we'll save the progress up until now
@@ -338,17 +308,9 @@ def futureMaxMinValues(values, periods=10, minValues=False):
 			newValues.append(val)
 	return newValues
 
-def decodeRawData(data):
-	if 'logs' in data: #the logs in our raw data are encoded via pickle, because of Arctic limitations
-		data['logs'] = data['logs'].apply(lambda x: db.decodeObject(x))
-	return data
-
-def loadDataForTick(lib, start, end):
-	return [db.loadData(lib, key, start, end, True) for key in db.dbKeys]
-
 def subsetByDate(data, start, end):
 	"""Function that takes in a DataFrame and start and end dates, returning the subset of the frame with these dates"""
-	return data[(data.date > start) & (data.date <= end)]
+	return data[(data.index > start) & (data.index <= end)]
 
 def isProperty(key):
 	"""Checks whether the given database key belongs to a property or not."""
@@ -362,9 +324,12 @@ def isProperty(key):
 
 def containsFullInterval(data, subset, end):
 	#if, for some reason, the subsetted data is empty, check only the intervals
-	if len(subset) == 0: return (data.iloc[len(data)-1].date >= end)
+	if len(subset) == 0:
+		return (data.iloc[len(data)-1].name >= end)
 	#check the real data
-	else: return (data.iloc[len(data)-1].date >= subset.iloc[len(subset)-1].date)
+	else:
+		res = (data.iloc[len(data)-1].name >= subset.iloc[len(subset)-1].name)
+		return res
 
 if __name__ == "__main__": #if this is the main file, parse the command args
 	parser = argparse.ArgumentParser(description="Script that uses downloaded blockchain and course data to generate and save data properties")
@@ -386,6 +351,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	properties = args.properties.split(',') if args.properties != None  else None
 
+	db.open()
+
 	if args.action == 'generate':
 		generateProperties(selectedProperties=properties, start=start, end=end, relative=args.relative, force=args.force)
 	elif args.action == 'remove':
@@ -404,6 +371,8 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 			properties.extend(relProps)
 
 		for prop in properties:
-			db.removeDB(chunkStore, prop)
+			db.remove(prop)
 	elif args.action == None or args.list:
 		print("Available properties:", str.join(',', [prop.name for prop in globalProperties]))
+
+	db.close()
