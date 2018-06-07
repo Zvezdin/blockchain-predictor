@@ -1,11 +1,12 @@
 import abc
-
 import time
+from datetime import datetime as dt
+
 import pandas as pd
 
 class Database(abc.ABC):
 	def __init__(self):
-		pass
+		self.timeseries = ['block', 'tick', 'tx', 'log', 'trace'] #the stored keys of our time raw data time series
 
 	@abc.abstractmethod
 	def open(self, store):
@@ -57,6 +58,8 @@ class Database(abc.ABC):
 		if not isinstance(data, pd.DataFrame):
 			raise ValueError("Given data to save is not a dataframe!")
 
+		assert(isinstance(data.index[0], dt))
+
 		start = time.time()
 		#if we have started writing this data before
 		if self.has_key(key):
@@ -89,7 +92,7 @@ class Database(abc.ABC):
 				self.setMetadata(key, metadata)
 		else:
 			self._save(key, data)
-			self.setMetadata(key, {'start': data.index[0], 'end': data.index[-1]['date']})
+			self.setMetadata(key, {'start': data.index[0], 'end': data.index[-1]})
 		print("Saving the data took "+str(time.time() - start)+" seconds")
 
 	def getMasterInterval(self, keys, start=None, end=None):
