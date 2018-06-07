@@ -7,8 +7,9 @@ import json
 import argparse
 
 from Naked.toolshed.shell import execute_js, muterun_js
+import pandas as pd
 
-import database_tools as db
+from database import instance as db
 
 blockSeries = 5000
 attemptsThreshold = 10
@@ -19,8 +20,6 @@ parseToInt = False
 tempFilename = 'data/temp.json'
 
 dataDownloaderScript = '--max-old-space-size=16384 data-downloader.js'
-
-chunkStore = db.getChunkstore()
 
 def loadRawData(filepath):
 
@@ -83,7 +82,13 @@ def downloadCourse():
 
 	processRawCourseData(data) #process a bit to make it suitable for storage
 
-	db.saveData(chunkStore, db.dbKeys['tick'], data, db.chunkSizes['tick']) #save to db
+	df = pd.DataFrame(data)
+	df.set_index('date', inplace=True)
+
+	print(df.head())
+	print(df.index[0], type(df.index[0]))
+
+	db.save('tick', df) # save to db
 
 
 def callDataDownloaderCourse(filename):
@@ -103,7 +108,7 @@ def callDataDownloaderBlockchain(start, count, filename):
 def downloadBlockchain(start=0, targetBlock=None):
 	"""Calls the JS script to download a certain block range and saves the result in the DB"""
 
-	currentBlock = getLatestBlock()
+	currentBlock = getLatestBlock() + 1 #add 1 for the next block to download
 
 	if currentBlock < 0:
 		currentBlock = start
@@ -142,8 +147,9 @@ def downloadBlockchain(start=0, targetBlock=None):
 
 		for key in data:
 			if data[key]:
-				db.saveData(chunkStore, db.dbKeys[key], data[key], db.chunkSizes[key]) #save in DB
-
+				df = pd.DataFrame(data[key])
+				df.set_index('date', inplace=True)
+				db.save(key, df)
 		currentBlock += series
 
 def getBlockchainFile(arg1, arg2): #the resulting file from the download script should match the requested arguments
@@ -160,8 +166,8 @@ def processRawBlockchainData(data):
 
 def getLatestBlock():
 	try:
-		tmp = db.getLatestRow(chunkStore, db.dbKeys['block']) #get a dataframe with only the latest row
-		num = tmp.values[0, tmp.columns.searchsorted('number')] + 1 #extract the block number from it, add 1 for the next one
+		tmp = db.getLatestRow('block') #get a dataframe with only the latest row
+		num = tmp.values[0, tmp.columns.searchsorted('number')] #extract the block number from it
 
 		return num
 	except:
@@ -178,6 +184,10 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 
 	args, _ = parser.parse_known_args()
 
+	db.open()
+
 	if args.course: downloadCourse()
 	if args.blockchain:
 		downloadBlockchain(args.start, args.end)
+
+	db.close()
