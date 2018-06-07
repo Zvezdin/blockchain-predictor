@@ -15,9 +15,11 @@ arctic = {git = "https://github.com/manahl/arctic.git", editable = true}
 pandas = "*"
 pillow = "*"
 tensorflow-gpu = "*"
+tables = "*"
 
 [dev-packages]
 ipython = "*"
+pylint = "*"
 
 [requires]
 python_version = "3.6"
