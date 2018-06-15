@@ -177,10 +177,12 @@ class MasterProvider():
 master = MasterProvider()
 
 class RequestHandler(BaseHTTPRequestHandler):
-	def _set_headers(self, typ):
+	def _set_headers(self, typ, len_data):
 		self.send_response(200)
 		self.send_header('Content-type', typ)
-		self.send_header('Transfer-Encoding', 'chunked')
+		self.send_header('Content-Length', len_data)
+		#the next line seems problematic. We'll do without this header for now.
+		#self.send_header('Transfer-Encoding', 'chunked')
 		self.end_headers()
 	
 	def _send_error(self, num):
@@ -210,12 +212,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 			return
 
 		if res is not None:
-			self._set_headers('text/json')
+			self._set_headers('text/json', len(res))
 			if isinstance(res, str):
 				res = res.encode('utf-8')
 			self.send_data_chunked(res, self.wfile)
 
-	def send_data_chunked(self, data, stream, max_length=10_000_000):
+	def send_data_chunked(self, data, stream, max_length=3):
 		i = 0
 		while True:
 			chunk = data[i:i+max_length]
