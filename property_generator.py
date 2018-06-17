@@ -13,7 +13,10 @@ from arctic.date import DateRange
 import numpy as np
 
 import properties.properties #this module contains all the property classes
-from property_util import state
+sys.path.insert(0, os.path.realpath('property_util'))
+from blockchain_state import state
+#from property_util.blockchain_state import state
+
 from database import instance as db
 
 propertyClasses = [x[1] for x in inspect.getmembers(properties.properties, inspect.isclass)] #get the classes
