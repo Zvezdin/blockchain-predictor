@@ -257,6 +257,10 @@ function cleanTransaction(tx){
 	delete tx.condition;
 	delete tx.creates;
 
+	//since this was loaded from a JSON, the BigNumber objects are no longer present
+	//tx.gasPrice = tx.gasPrice.toFixed()
+	//tx.value = tx.value.toFixed()
+
 	return tx;
 }
 
@@ -395,6 +399,10 @@ function cleanBlock(block){ //this function removes many useless for our cases f
 	//parity-related properties
 	delete block.sealFields;
 	delete block.author;
+
+	//since this was loaded from a JSON, the BigNumber objects are no longer present
+	//block.difficulty = block.difficulty.toFixed()
+	//block.totalDifficulty = block.totalDifficulty.toFixed()
 
 	if(block.transactions.length > 0 && typeof block.transactions[0] !== 'string'){
 		for(i=0; i<block.transactions.length; i++){
