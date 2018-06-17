@@ -66,6 +66,8 @@ class PropertyAccountNumberDistribution(Property):
 
 		lastTime = 0
 
+		fromI = data['trace'].columns.get_loc('from')+1
+
 		start = time.time()
 
 		if not fakeData:
@@ -104,7 +106,7 @@ class PropertyAccountNumberDistribution(Property):
 			if not self.ignoreTrace:
 				for trace in traces.itertuples():
 					try:
-						sender = trace._3 #the field is named 'from', but it is renamed to its index in the tuple
+						sender = getattr(trace, '_'+str(fromI)) #the field is named 'from', but it is renamed to its index in the tuple
 									#due to it being a python keyword. Beware, this will break if the raw data changes.
 					except AttributeError:
 						print(trace) #debug info to change the attribute
@@ -134,7 +136,7 @@ class PropertyAccountNumberDistribution(Property):
 						if receiver is not None:
 							self.groupCache[receiver] = None
 
-					timestamp = trace.date.value // 10**9 #EPOCH time
+					timestamp = trace.Index.value // 10**9 #EPOCH time
 
 					self.lastTimestamp = max(self.lastTimestamp, timestamp)
 

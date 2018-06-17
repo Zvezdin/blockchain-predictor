@@ -48,7 +48,9 @@ class PropertyTraceProperties(Property):
 		txCount = len(state.isTransaction)
 		traceCount = data['trace'].shape[0]
 
-		self.traceTx = 0 if traceCount is 0 else traceCount / txCount
+		fromI = data['trace'].columns.get_loc('from')+1
+
+		self.traceTx = 0 if txCount is 0 else traceCount / txCount
 		self.traceBl = 0 if traceCount is 0 else traceCount / blockCount
 		
 		self.topXCount = self.scale(len(state.topX))
@@ -78,7 +80,7 @@ class PropertyTraceProperties(Property):
 		for trace in data['trace'].itertuples():
 			value = int(trace.value, 0)
 
-			send = trace._3
+			send = getattr(trace, '_'+str(fromI))
 			recv = trace.to
 			try:
 				gas = int(trace.gasUsed, 0)

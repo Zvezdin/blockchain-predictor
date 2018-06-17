@@ -29,12 +29,14 @@ class PropertyAccountBalanceDistribution(Property):
 
 		res = np.zeros((self.subPropertyCount, self.tickCount))
 
+		fromCol = data['trace'].columns.get_loc('from')+1
+
 		#update our global dictionary of balances
 		for trace in traces.itertuples():
 
 			val = int(trace.value, 0)
 
-			sender = trace._3 #the field is named 'from', but it is renamed to its index in the tuple
+			sender = getattr(trace, '_'+str(fromCol)) #the field is named 'from', but it is renamed to its index in the tuple
 							#due to it being a python keyword. Beware, this will break if the raw data changes.
 			receiver = trace.to
 
@@ -64,7 +66,7 @@ class PropertyAccountBalanceDistribution(Property):
 			for trace in traces.itertuples():
 
 				val = int(trace.value, 0)
-				sender = trace._3
+				sender = getattr(trace, '_'+str(fromCol))
 				receiver = trace.to
 
 				

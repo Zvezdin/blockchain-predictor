@@ -11,8 +11,8 @@ class PropertyNetworkHashrate(Property):
 
 		if (bl.shape[0] > 1): #if we have one or zero rows, we will divide by zero.
 			avgDifficulty =  self.averageOfColumn(bl, 'difficulty')
-			start = bl.get_value(bl.index[0], 'date')
-			end = bl.get_value(bl.index[bl.shape[0]-1], 'date')
+			start = bl.index[0]
+			end = bl.index[-1]
 			avgBlockTime = (end - start).total_seconds()
 
 			return (avgDifficulty / avgBlockTime)
