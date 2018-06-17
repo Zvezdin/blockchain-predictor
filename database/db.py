@@ -93,7 +93,7 @@ class Database(abc.ABC):
 		else:
 			self._save(key, data)
 			self.setMetadata(key, {'start': data.index[0], 'end': data.index[-1]})
-		print("Saving the data took "+str(time.time() - start)+" seconds")
+		print("Saving %s took %s seconds" % (key, str(time.time() - start)))
 
 	def getMasterInterval(self, keys, start=None, end=None):
 		"""Checks the min/max dates for each key and returns the overlap. If start and end are given, returns the overlap with them as well."""
