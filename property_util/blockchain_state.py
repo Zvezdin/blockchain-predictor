@@ -10,7 +10,7 @@ SortedValueDict=dict #temp debug
 
 from property import Property
 
-class BlockchainState(Property):
+class BlockchainState():
 	def __init__(self):
 		self.requires = ['trace']#, 'tx', 'log']
 		self.requiresHistoricalData  = True
@@ -156,10 +156,12 @@ class BlockchainState(Property):
 
 		ethExchanged = 0
 
+		fromI = data['trace'].columns.get_loc('from')+1
+
 		if 'trace' in data:
 			t = now()
 			for trace in data['trace'].itertuples():
-				sender = trace._3
+				sender = getattr(trace, '_'+str(fromI))
 				receiver = trace.to
 
 				sender = self.noneIfInf(sender)
@@ -170,7 +172,7 @@ class BlockchainState(Property):
 				gasUsed = self.noneIfInf(trace.gasUsed)
 				if gasUsed is not None:
 					gasUsed = int(trace.gasUsed, 0)
-				timestamp = trace.date.value // 10**9 #EPOCH time
+				timestamp = trace.Index.value // 10**9 #EPOCH time
 
 				ethExchanged += value
 
@@ -247,8 +249,9 @@ class BlockchainState(Property):
 
 		if 'tx' in data:
 			t = now()
+			fromITX = data['tx'].columns.get_loc('from')+1
 			for tx in data['tx'].itertuples():
-				sender = self.noneIfInf(tx._4)
+				sender = self.noneIfInf(getattr(tx, '_'+str(fromITX)))
 
 				if sender is not None:
 					self.localTransactionsOf.setdefault(sender, [])
