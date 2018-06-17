@@ -11,6 +11,8 @@ import pandas as pd
 
 from database import instance as db
 
+from tools import exp_to_int
+
 blockSeries = 5000
 attemptsThreshold = 10
 
@@ -148,7 +150,20 @@ def downloadBlockchain(start=0, targetBlock=None):
 		for key in data:
 			if data[key]:
 				df = pd.DataFrame(data[key])
+				if key == 'trace':
+					for k in ['gasUsed', 'gas']:
+						fr = df.iloc[0][k]
+						print(fr, type(fr))
 				df.set_index('date', inplace=True)
+
+				if key == 'block':
+					#TODO: Ugly fix
+					#the following keys are problematic. Due to a bug in the JS implementation,
+					#some values may be in exponential form, which is more string chars than the max allowance of the DB
+					#so we need to parse them to normal numbers and then convert to string
+					for k in ['totalDifficulty', 'difficulty']: #problematic keys
+						df[k] = df[k].map(lambda x: str(exp_to_int(x)))
+
 				db.save(key, df)
 		currentBlock += series
 
