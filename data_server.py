@@ -114,7 +114,7 @@ class BlockchainProvider(Provider):
 		data = db.loadData(self.store, id, start, end, filter = True)
 
 		#due to database limitations, the values of the dataframe MAY be pickled (if it's a distribution). Let's unpickle them
-		decodeDataframe(data, id)
+		data = decodeDataframe(data)
 
 		#debug & info
 		print(data.head(3))
