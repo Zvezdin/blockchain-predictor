@@ -88,7 +88,7 @@ class BlockchainProvider(Provider):
 		val = latestRow[id].values[0] #its value
 		if isinstance(val, str): #some values are pickled; database limitations
 			val = db.decodeObject(val)
-		if isinstance(val, float) or isinstance(val, int):
+		if isinstance(val, float) or isinstance(val, int) or isinstance(val, np.int64):
 			shape = (1,)
 			print("number!")
 		elif isinstance(val, np.ndarray):
