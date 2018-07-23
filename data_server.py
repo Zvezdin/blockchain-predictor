@@ -115,6 +115,12 @@ class BlockchainProvider(Provider):
 
 		#due to database limitations, the values of the dataframe MAY be pickled (if it's a distribution). Let's unpickle them
 		data = decodeDataframe(data)
+
+		for col in data.columns:
+			if isinstance(data[col].iloc[0], np.ndarray):
+				print("Replacing column %s from property %s with string representation of the np array" % (col, id))
+				data[col] = data[col].apply(lambda x: str(x))
+
 		
 		#debug & info
 		print(data.head(3))
@@ -230,11 +236,16 @@ class RequestHandler(BaseHTTPRequestHandler):
 	def send_data(self, data, stream):
 		stream.write(data)
 
+def init():
+	np.set_printoptions(threshold=np.nan);
+
 def run(server_class=HTTPServer, handler_class=RequestHandler):
 	server_address = ('', 8000)
 	httpd = server_class(server_address, handler_class)
 	httpd.serve_forever()
 
+init()
+print("Running on 127.0.0.1:8000")
 run()
 
 #REQUEST DOCUMENTATION:
