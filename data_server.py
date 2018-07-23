@@ -119,7 +119,7 @@ class BlockchainProvider(Provider):
 		for col in data.columns:
 			if isinstance(data[col].iloc[0], np.ndarray):
 				print("Replacing column %s from property %s with string representation of the np array" % (col, id))
-				data[col] = data[col].apply(lambda x: str(x).replace(" ", ","))
+				data[col] = data[col].apply(lambda x: np.array2string(x, separator=',', threshold=np.inf, max_line_width=np.inf).replace(' ', ''))
 
 		
 		#debug & info
@@ -237,7 +237,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 		stream.write(data)
 
 def init():
-	np.set_printoptions(threshold=np.nan);
+	np.set_printoptions(threshold=np.nan)
 
 def run(server_class=HTTPServer, handler_class=RequestHandler):
 	server_address = ('', 8000)
