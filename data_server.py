@@ -119,7 +119,7 @@ class BlockchainProvider(Provider):
 		for col in data.columns:
 			if isinstance(data[col].iloc[0], np.ndarray):
 				print("Replacing column %s from property %s with string representation of the np array" % (col, id))
-				data[col] = data[col].apply(lambda x: str(x))
+				data[col] = data[col].apply(lambda x: str(x).replace(" ", ","))
 
 		
 		#debug & info
