@@ -8,7 +8,7 @@ const ArgumentParser = require("argparse").ArgumentParser;
 const big = require("bignumber.js");
 
 const Cacher = require("./js/cacher.js");
-const cacher = new Cacher("/secondStorage/programming/chain/cache");
+const cacher = new Cacher("/storage/programming/chain/cache");
 
 const JsonUtil = require("./js/json_util.js");
 const jsonUtil = new JsonUtil();
