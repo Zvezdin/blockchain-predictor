@@ -21,6 +21,13 @@ class Property(abc.ABC):
 		self.requiresHistoricalData  = False
 		"""A flag that shows if the given property requires all available data for all date intervals to be sent to it. For example, if it does internal storage or calculations and previous processing of ticks has an effect on future processes."""
 
+		self.returnsData = True
+		"""Whether this property returns information or is only a state holder"""
+
+		self.previousTicks = 0
+		self.nextTicks = 0
+		"""Fields that indicate whether a property requies any number of ticks prior or after the current one to process a value"""
+
 	@abc.abstractmethod
 	def processTick(self, data):
 		"""Takes block, transaction and course data for an interval and returns the property's value"""

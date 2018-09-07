@@ -1,11 +1,8 @@
-import sys, os
 import math
 
-sys.path.insert(0, os.path.realpath('property_util'))
-
-from blockchain_state import state
-from movingAverages import average
-from movingAverages import Average
+from ..util import state
+from ..util import average
+from ..util import Average
 
 from .property import Property
 
