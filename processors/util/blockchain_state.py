@@ -1,6 +1,4 @@
 import math
-import sys, os
-sys.path.insert(0, os.path.realpath('./properties'))
 
 from time import time as now
 from collections import deque
@@ -8,12 +6,14 @@ from collections import deque
 #from sorted_value_dict import SortedValueDict
 SortedValueDict=dict #temp debug
 
-from property import Property
+from processors.properties.property import Property
 
-class BlockchainState():
+class BlockchainState(Property):
 	def __init__(self):
 		self.requires = ['trace']#, 'tx', 'log']
 		self.requiresHistoricalData  = True
+
+		self.returnsData = False
 
 		self._init_state()
 		self._clear_state()
