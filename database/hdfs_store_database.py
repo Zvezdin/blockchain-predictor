@@ -1,7 +1,7 @@
 from .db import Database
 import pandas as pd
 
-from tools.encode_decode import encodeDataFrame, decodeDataframe
+from util.encode_decode import encodeDataFrame, decodeDataframe
 
 minSizes = {
 	'trace': {'from': 42, 'to': 42, 'subtype': 12, 'transactionHash': 66, 'value': 40, 'type': 10, 'gas': 10, 'gasUsed': 10}, #TODO: same with 'value'

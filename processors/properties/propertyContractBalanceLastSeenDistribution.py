@@ -2,12 +2,10 @@ from .propertyAccountNumberDistribution import PropertyAccountNumberDistribution
 
 import math
 import sys
-#because python is stupid, this path is not relative to this script, but to the execution start point.
-sys.path.insert(0, 'c++/build') #include our C++ implementation
 
 import numpy as np
 
-import cppBalanceLastSeen
+from .cpp import cppBalanceLastSeen
 
 class PropertyContractBalanceLastSeenDistribution(PropertyAccountNumberDistribution):
 	"""
