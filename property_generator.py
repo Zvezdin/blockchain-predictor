@@ -9,18 +9,11 @@ import traceback
 import inspect
 
 import pandas as pd
-from arctic.date import DateRange
 import numpy as np
 
-import properties.properties #this module contains all the property classes
-sys.path.insert(0, os.path.realpath('property_util'))
-from blockchain_state import state
-#from property_util.blockchain_state import state
-
+from processors import propertyObjects
+from processors import state
 from database import instance as db
-
-propertyClasses = [x[1] for x in inspect.getmembers(properties.properties, inspect.isclass)] #get the classes
-globalProperties = [clas() for clas in propertyClasses]
 
 debug = False
 
@@ -33,17 +26,20 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 	properties = []
 
 	if selectedProperties and len(selectedProperties) > 0:
-		for prop in globalProperties: #for every property that we have
+		for prop in propertyObjects: #for every property that we have
 			if prop.name in selectedProperties: #if it is selected
 				properties.append(prop) #add it for generation
 		
 		if len(properties) != len(selectedProperties):
 			print("ERROR! One or more of the given properties do not exist!")
 			return
-	else: properties = globalProperties
+	else: properties = propertyObjects
 
 	usingState = False
 	historicalData = False
+
+	prev_t=0
+	next_t=0
 
 	for prop in properties:
 
@@ -60,9 +56,13 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 		
 		if prop.requiresHistoricalData:
 			historicalData = True
+		prev_t = max(prev_t, prop.previousTicks)
+		next_t = max(next_t, prop.nextTicks)
 
 	if usingState:
 		historicalData = True
+
+	window_length = prev_t + 1 + next_t
 
 	if historicalData and start is not None and not force:
 		raise ValueError("The selected properties require all historical data, yet a start was given as an argument.")
@@ -74,21 +74,44 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 
 	print("Requirements are:", reqList)
 
-	def tickHandler(data, date):
-		for prop in properties:
-			val = prop.processTick(data)
-			if debug: print("Got value", val, "for property", prop.name)
+	def tickHandler(data, dates):
+		date = dates[prev_t]
 
-			if prop.provides is not None:
-				if len(prop.provides) != len(val):
-					raise ValueError('The length of the returned child properties does not match the list of child ones by property %s !' % prop.name)
-				for i, provided in enumerate(prop.provides):
-					values[provided].append({'date': date, provided: val[i]})
-			else:
-				values[prop.name].append({'date': date, prop.name: val})
+		if usingState:
+			iterateOver = [state, *properties]
+		else:
+			iterateOver = properties
+
+		for prop in iterateOver:
+			s_i = prev_t - prop.previousTicks
+			e_i = prev_t + 1 + prop.nextTicks
+			subset = data[s_i : e_i]
+
+			pr_data = {}
+
+			for key in subset[0].keys():
+				for dct in subset:
+					pr_data.setdefault(key, [])
+					pr_data[key].append(dct[key])
+				pr_data[key] = pd.concat(pr_data[key])
+
+			#TODO: subset according to the property's requirements?
+
+			val = prop.processTick(pr_data)
+
+			if prop.returnsData:
+				if debug: print("Got value", val, "for property", prop.name)
+
+				if prop.provides is not None:
+					if len(prop.provides) != len(val):
+						raise ValueError('The length of the returned child properties does not match the list of child ones by property %s !' % prop.name)
+					for i, provided in enumerate(prop.provides):
+						values[provided].append({'date': date, provided: val[i]})
+				else:
+					values[prop.name].append({'date': date, prop.name: val})
 
 	try:
-		forEachTick(tickHandler, 'tick', reqList, start=start, end=end, usingState=usingState)
+		forEachTick(tickHandler, 'tick', reqList, start=start, end=end, window=window_length, usingState=usingState)
 		print("Finished generating property values.")
 	except KeyboardInterrupt:
 		print("Got interrupted, saving the current progress...")
@@ -103,6 +126,8 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 
 
 	for prop in list(values.keys()):
+		print(values[prop])
+
 		modifiedProperty(values, prop, prop+"_sma", smaValues)
 		modifiedProperty(values, prop, prop+"_ema", emaValues)
 		modifiedProperty(values, prop, prop+"_10max", futureMaxValues)
@@ -130,16 +155,19 @@ def saveProperty(name, val, quiet = False):
 		val2.append(v2)
 
 	df = pd.DataFrame(val2)
-	print(df)
+	
+	print(df.head())
+	print(df.tail())
+	
 	df.set_index('date', inplace=True)
 
 	if not quiet:
-		print("Saving prop " + name+ " with values ", df.head(5), df.tail(5))
+		print("Saving prop " + name)#+ " with values ", df.head(5), df.tail(5))
 		print("With byte size:", sys.getsizeof(df))
 
 	db.save(name, df)
 
-def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usingState=False):
+def forEachTick(callback, mainKey, dataKeys, start = None, end = None, window=1, usingState=False):
 	#get the time interval where we have all needed data
 	start, end = db.getMasterInterval(['tick', 'block'], start, end) #TODO REMOVE DEBUG
 
@@ -166,6 +194,9 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usin
 
 	startTime = time.time()
 
+	windowCache = []
+	dateCache = []
+
 	for mainRow in mainData.iterrows():
 		rowData = mainRow[1]
 
@@ -180,11 +211,10 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usin
 			currentEnd = rowDate
 			lastEnd = currentEnd
 
-			#print("Loading data for dates", currentStart, currentEnd)
-
 			#load the needed data
 
 			tickData = {}
+
 			for key in data:
 				tickData[key] = subsetByDate(data[key], currentStart, currentEnd)
 
@@ -206,9 +236,16 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, t=1, usin
 					print(tickData[key].head(2))
 					print(tickData[key].tail(2))
 
-			if usingState:
-				state.processTick(tickData)
-			callback(tickData, currentEnd)
+			for cache, data_to_store in [(windowCache, tickData), (dateCache, currentEnd)]:
+				cache.append(data_to_store)
+
+				if len(cache) < window:
+					continue
+				
+				if len(cache) > window:
+					cache.pop(0)
+
+			callback(windowCache, dateCache)
 
 def modifiedProperty(valuesDict, name, newName, transformFunction):
 	propVals = []
@@ -317,7 +354,7 @@ def subsetByDate(data, start, end):
 
 def isProperty(key):
 	"""Checks whether the given database key belongs to a property or not."""
-	for prop in globalProperties:
+	for prop in propertyObjects:
 		if key == prop.name:
 			return True #TODO: What about property modifiers, like _rel, _sma, _10max?
 		if prop.provides is not None:
@@ -360,9 +397,9 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		generateProperties(selectedProperties=properties, start=start, end=end, relative=args.relative, force=args.force)
 	elif args.action == 'remove':
 		if properties == None:
-			properties = [prop.name for prop in globalProperties if prop.provides == None]
+			properties = [prop.name for prop in propertyObjects if prop.provides == None]
 
-			for prop in globalProperties:
+			for prop in propertyObjects:
 				if prop.provides is not None:
 					properties.extend(prop.provides)
 
@@ -376,6 +413,6 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 		for prop in properties:
 			db.remove(prop)
 	elif args.action == None or args.list:
-		print("Available properties:", str.join(',', [prop.name for prop in globalProperties]))
+		print("Available properties:", str.join(',', [prop.name for prop in propertyObjects]))
 
 	db.close()
