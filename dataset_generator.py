@@ -191,11 +191,11 @@ def randomizeDataset(dataset):
 def saveDataset(filename, data):
 	if save:
 		#save the dataset to a file
-		try:
-			with open(filename, 'wb') as f:
-				pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
-		except Exception as e:
-			print('Unable to save data to', filename, ':', e)
+		#try:
+		with open(filename, 'wb') as f:
+			pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+		#except Exception as e:
+		#	print('Unable to save data to', filename, ':', e)
 
 def run(model, properties, targets, filename, start=None, end=None, ratio=[1], shuffle=False, args={}, preprocess={}):
 	if type(properties) != list:
