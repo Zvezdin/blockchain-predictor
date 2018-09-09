@@ -17,7 +17,7 @@ class HDFSStoreDatabase(Database):
 		self.store = None
 
 	#TODO: Have this filepath in a config file somewhere
-	def open(self, store='/storage/programming/db_h5/db.h5'):
+	def open(self, store='/storage/programming/db_h5/db_small.h5'):
 		self.store = pd.HDFStore(store)
 
 	def close(self):
@@ -26,7 +26,10 @@ class HDFSStoreDatabase(Database):
 	def remove(self, key):
 		self.store.remove(key)
 
-	def getMeatdata(self, key):
+	def rename(self, key, new_key):
+		self.store.get_node(key)._f_rename(new_key)
+
+	def getMetadata(self, key):
 		return self.store.get_storer(key).attrs.metadata
 
 	def setMetadata(self, key, metadata):
@@ -53,8 +56,9 @@ class HDFSStoreDatabase(Database):
 
 		res = self.store.select(key, where=query, iterator=iterator, chunksize=(None if not iterator else 10000))
 		if iterator:
-			res = iter(res)
-			#TODO: Handle the case where we need to decode this iterator
+			prep = IteratorPreprocessor(iter(res))
+
+			return iter(prep)
 		else:
 			res = decodeDataframe(res)
 
@@ -72,3 +76,17 @@ class HDFSStoreDatabase(Database):
 
 	def list_keys(self):
 		return [key.replace('/', '') for key in self.store.keys()]
+
+class IteratorPreprocessor:
+	def __init__(self, other_iter):
+		self.other_iter = other_iter
+
+	def __iter__(self):
+		return self
+
+	def __next__(self):
+		res = next(self.other_iter)
+
+		res = decodeDataframe(res)
+
+		return res
