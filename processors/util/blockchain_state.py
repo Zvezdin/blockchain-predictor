@@ -10,6 +10,8 @@ from processors.properties.property import Property
 
 class BlockchainState(Property):
 	def __init__(self):
+		super().__init__()
+
 		self.requires = ['trace']#, 'tx', 'log']
 		self.requiresHistoricalData  = True
 
