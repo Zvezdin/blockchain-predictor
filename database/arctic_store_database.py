@@ -43,7 +43,7 @@ class ArcticStoreDatabase(Database):
 	def remove(self, key):
 		self.store.delete(key) #used for debugging
 		
-	def getMeatdata(self, key):
+	def getMetadata(self, key):
 		return self.store.read_metadata(key)
 
 	def setMetadata(self, key, metadata):
