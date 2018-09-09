@@ -14,7 +14,7 @@ def decodeObject(encoded):
 def decodeDataframe(data):
 	for col in data.columns:
 		if isinstance(data.iloc[0][col], str):# and data.iloc[0][col].startswith(marker):
-			data[col] = data[col].apply(lambda x: decodeObject(x.replace(marker, ''))) #remove the marker and decode
+			data[col] = data[col].apply(lambda x: decodeObject(x.replace(marker, '')) if (isinstance(x, str) and marker in x) else x) #remove the marker and decode
 
 	return data
 
