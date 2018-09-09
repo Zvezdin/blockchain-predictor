@@ -6,7 +6,7 @@ import pandas as pd
 
 class Database(abc.ABC):
 	def __init__(self):
-		self.timeseries = ['block', 'tick', 'tx', 'log', 'trace'] #the stored keys of our time raw data time series
+		pass#self.timeseries = ['block', 'tick', 'tx', 'log', 'trace'] #the stored keys of our time raw data time series
 
 	@abc.abstractmethod
 	def open(self, store):
@@ -21,6 +21,10 @@ class Database(abc.ABC):
 		pass
 
 	@abc.abstractmethod
+	def rename(self, key, new_key):
+		pass
+
+	@abc.abstractmethod
 	def getFirstRow(self, key):
 		pass
 
@@ -29,7 +33,7 @@ class Database(abc.ABC):
 		pass
 
 	@abc.abstractmethod
-	def getMeatdata(self, key):
+	def getMetadata(self, key):
 		pass
 
 	@abc.abstractmethod
@@ -67,7 +71,7 @@ class Database(abc.ABC):
 
 			#read the last saved timestamp
 			try:
-				newestDate = self.getMeatdata(key)['end']
+				newestDate = self.getMetadata(key)['end']
 			except:
 				newestDate = 0
 			print("newest date is ")
@@ -81,7 +85,7 @@ class Database(abc.ABC):
 			if(len(data) == trimIndex): print("Data already written!")
 			else:
 				#update the metadata and save the trimmed data
-				metadata = self.getMeatdata(key)
+				metadata = self.getMetadata(key)
 				print("Got metadata", metadata)
 				
 				assert(metadata['end'] == newestDate)
@@ -97,9 +101,9 @@ class Database(abc.ABC):
 
 	def getMasterInterval(self, keys, start=None, end=None):
 		"""Checks the min/max dates for each key and returns the overlap. If start and end are given, returns the overlap with them as well."""
-		startAll = max([self.getMeatdata(key)['start'] for key in keys])
+		startAll = max([self.getMetadata(key)['start'] for key in keys])
 
-		endAll = min([self.getMeatdata(key)['end'] for key in keys])
+		endAll = min([self.getMetadata(key)['end'] for key in keys])
 
 		if start:
 			start = max(start, startAll) #make sure we don't go out of bounds
