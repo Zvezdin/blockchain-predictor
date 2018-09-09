@@ -25,10 +25,10 @@ def run(key, key2=None, db1=None, db2=None):
 		db2 = db1
 
 	with DatabaseContext(db1):
-		met1 = db.getMeatdata(key)
+		met1 = db.getMetadata(key)
 
 	with DatabaseContext(db2):
-		met2 = db.getMeatdata(key2)
+		met2 = db.getMetadata(key2)
 
 	met = met1.copy()
 	met['start'] = max(met1['start'], met2['start'])
@@ -51,9 +51,9 @@ def run(key, key2=None, db1=None, db2=None):
 			v2 = val2[x][j]
 
 			if isinstance(v1, np.ndarray):
-				assert(np.array_equal(val1[x][j], val2[x][j]))
-			else:
-				assert(False)
+				assert(np.array_equal(v1, v2))
+			elif isinstance(v1, float) or isinstance(v1, int):
+				assert(v1 == v2)
 
 	print("Success!")
 
