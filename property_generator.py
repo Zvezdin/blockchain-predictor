@@ -8,43 +8,37 @@ import argparse
 import traceback
 import inspect
 
+from tables.exceptions import NodeError
+
 import pandas as pd
 import numpy as np
 
 from processors import propertyObjects
+from processors import postprocessorObjects
 from processors import state
 from database import instance as db
 
 debug = False
 
 
-def generateProperties(selectedProperties = None, start = None, end = None, relative = False, force = False):
+def generateProperties(processorObjects, start=None, end=None, force=False):
 	values = {} #a dict that holds an array of the returned values for each property
 
 	reqList = []
 
-	properties = []
-
-	if selectedProperties and len(selectedProperties) > 0:
-		for prop in propertyObjects: #for every property that we have
-			if prop.name in selectedProperties: #if it is selected
-				properties.append(prop) #add it for generation
-		
-		if len(properties) != len(selectedProperties):
-			print("ERROR! One or more of the given properties do not exist!")
-			return
-	else: properties = propertyObjects
-
 	usingState = False
 	historicalData = False
+	
+	#if all processors are flexible
+	flexibleRequires = sum(x.flexibleRequires for x in processorObjects) == len(processorObjects)
 
-	prev_t=0
-	next_t=0
+	prev_t = 0
+	next_t = 0
 
-	for prop in properties:
+	for prop in processorObjects:
 
 		if prop.provides is None:
-			values[prop.name]= []
+			values[prop.name] = []
 		else:
 			for name in prop.provides:
 				values[name] = []
@@ -53,7 +47,7 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 		if prop.requiresState and not usingState:
 			usingState = True
 			reqList += state.requires
-		
+
 		if prop.requiresHistoricalData:
 			historicalData = True
 		prev_t = max(prev_t, prop.previousTicks)
@@ -70,17 +64,18 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 	#remove dublicate entries
 	reqList = list(set(reqList))
 
-	print("Working with properties:", properties, "" if not usingState else "and using state.")
+	print("Working with properties:", processorObjects, "" if not usingState else "and using state.")
 
 	print("Requirements are:", reqList)
 
 	def tickHandler(data, dates):
+
 		date = dates[prev_t]
 
 		if usingState:
-			iterateOver = [state, *properties]
+			iterateOver = [state, *processorObjects]
 		else:
-			iterateOver = properties
+			iterateOver = processorObjects
 
 		for prop in iterateOver:
 			s_i = prev_t - prop.previousTicks
@@ -111,31 +106,12 @@ def generateProperties(selectedProperties = None, start = None, end = None, rela
 					values[prop.name].append({'date': date, prop.name: val})
 
 	try:
-		forEachTick(tickHandler, 'tick', reqList, start=start, end=end, window=window_length, usingState=usingState)
+		forEachTick(tickHandler, 'tick', reqList, start=start, end=end, window=window_length, flexible=flexibleRequires)
 		print("Finished generating property values.")
 	except KeyboardInterrupt:
 		print("Got interrupted, saving the current progress...")
 
-	#hold the property names that don't provide children in a list
-	propNames = [prop.name for prop in properties if prop.provides is None]
 
-	#take the children those who provide them
-	for prop in properties:
-		if prop.provides is not None:
-			propNames.extend(prop.provides)
-
-
-	for prop in list(values.keys()):
-		print(values[prop])
-
-		modifiedProperty(values, prop, prop+"_sma", smaValues)
-		modifiedProperty(values, prop, prop+"_ema", emaValues)
-		modifiedProperty(values, prop, prop+"_10max", futureMaxValues)
-		modifiedProperty(values, prop, prop+"_10min", futureMinValues)
-
-	if relative: #turn everything relative
-		for prop in list(values.keys()):
-			modifiedProperty(values, prop, prop+"_rel", relativeValues)
 
 	#save the raw property values
 	for prop in values.keys():
@@ -167,7 +143,11 @@ def saveProperty(name, val, quiet = False):
 
 	db.save(name, df)
 
-def forEachTick(callback, mainKey, dataKeys, start = None, end = None, window=1, usingState=False):
+	meta = db.getMetadata(name)
+	meta['type'] = 'property'
+	db.setMetadata(name, meta)
+
+def forEachTick(callback, mainKey, dataKeys, start = None, end = None, window=1, flexible=False):
 	#get the time interval where we have all needed data
 	start, end = db.getMasterInterval(['tick', 'block'], start, end) #TODO REMOVE DEBUG
 
@@ -181,9 +161,13 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, window=1,
 
 	iterators = {}
 
-	for key in db.timeseries: #for each key (not value) that we store in the dbKeys
-		if dataKeys and key not in dataKeys:
-			continue
+	for key in dataKeys:
+		if not db.has_key(key):
+			if flexible:
+				continue
+			else:
+				raise ValueError("Required key %s is not available for processors." % key)
+		
 		iterators[key] = db.get(key, start=start, end=end, iterator=True)
 		print("Working with requested data", key)
 
@@ -236,14 +220,20 @@ def forEachTick(callback, mainKey, dataKeys, start = None, end = None, window=1,
 					print(tickData[key].head(2))
 					print(tickData[key].tail(2))
 
+			skipTick=False
+
 			for cache, data_to_store in [(windowCache, tickData), (dateCache, currentEnd)]:
 				cache.append(data_to_store)
 
 				if len(cache) < window:
-					continue
+					skipTick=True
+					break
 				
 				if len(cache) > window:
 					cache.pop(0)
+
+			if skipTick:
+				continue
 
 			callback(windowCache, dateCache)
 
@@ -371,48 +361,91 @@ def containsFullInterval(data, subset, end):
 		res = (data.iloc[len(data)-1].name >= subset.iloc[len(subset)-1].name)
 		return res
 
-if __name__ == "__main__": #if this is the main file, parse the command args
-	parser = argparse.ArgumentParser(description="Script that uses downloaded blockchain and course data to generate and save data properties")
-	parser.add_argument('--action', type=str, default=None, choices=['generate', 'remove'], help='Whether to generate properties or to remove some/all previously generated ones.')
-	parser.add_argument('--properties', type=str, default=None, help='A list of the names of the properties to generate, separated by a comma.')
-	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
-	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
-	parser.add_argument('--list', dest='list', action="store_true", help="List the available properties that can be generated.")
-	parser.set_defaults(list=False)
-	parser.add_argument('--force', dest='force', action="store_true", help="Shut up and 'sudo do_the_job'.")
-	parser.set_defaults(force=False)
-	parser.add_argument('--relative', dest='relative', action="store_true", help="Generate the properties with relative values.")
-	parser.set_defaults(relative=False)
+def getObjectsFromNameList(names, objects, empty_list_is_all=True):
+	if len(names) > 0:
+		res = []
+		for obj in objects: #for every property that we have
+			if obj.name in names: #if it is selected
+				res.append(obj) #add it for generation
+		
+		if len(res) != len(names):
+			raise ValueError("One or more of the given processors (%s) do not exist!" % str.join(',', names))
+		return res
+	elif empty_list_is_all:
+		return objects.copy()
+	else:
+		raise ValueError("Empty name list given")
 
-	args, _ = parser.parse_known_args()
+def generatePostprocessors(postprocessors):
+	for proc in postprocessors:
+		proc_name = proc.name
 
-	start = dateutil.parser.parse(args.start) if args.start is not None else None
-	end = dateutil.parser.parse(args.end) if args.end is not None else None
+		for prop in propertyObjects:
+			prop_name = prop.name
 
-	properties = args.properties.split(',') if args.properties != None  else None
+			if db.has_key(prop_name):
+				print(proc_name, prop_name)
 
+				proc.requires = [prop_name]
+
+				generateProperties([proc])
+
+				new_name = proc_name % prop_name 
+				#try: # Problem: renaming the key doesn't change the name of the df columns
+				#	db.rename(proc_name, proc_name % prop_name)
+				#except NodeError:
+				print("Renaming %s to %s" % (proc_name, new_name))
+
+				data = db.get(proc_name)
+				meta = db.getMetadata(proc_name)
+
+				data.rename(index=str, columns={prop_name: new_name})
+				meta['type'] = 'postprocessor'
+
+				db.save(new_name, data)
+				db.setMetadata(new_name, meta)
+
+				db.remove(proc_name)
+
+def run(action, processor_type, processors, start=None, end=None, list=False, force=False):
 	db.open()
 
-	if args.action == 'generate':
-		generateProperties(selectedProperties=properties, start=start, end=end, relative=args.relative, force=args.force)
-	elif args.action == 'remove':
-		if properties == None:
-			properties = [prop.name for prop in propertyObjects if prop.provides == None]
+	processorObjects = propertyObjects if processor_type == "property" else postprocessorObjects
 
-			for prop in propertyObjects:
-				if prop.provides is not None:
-					properties.extend(prop.provides)
+	if action == 'generate':
+		objects = getObjectsFromNameList(processors, processorObjects)
+		if processor_type == 'property':
+			generateProperties(objects, start=start, end=end, force=force)
+		else:
+			generatePostprocessors(objects)
+	elif action == 'remove':
+		for key in db.list_keys():
+			meta = db.getMetadata(key)
 
-			relProps = properties.copy()
-
-			for i, prop in enumerate(relProps):
-				relProps[i] += '_rel'
-
-			properties.extend(relProps)
-
-		for prop in properties:
-			db.remove(prop)
+			if 'type' in meta:
+				if key in processors or meta['type'] == processor_type:
+					db.remove(key)
+					print("Successfully removed key %s" % key)
 	elif args.action == None or args.list:
 		print("Available properties:", str.join(',', [prop.name for prop in propertyObjects]))
 
 	db.close()
+
+if __name__ == "__main__": #if this is the main file, parse the command args
+	parser = argparse.ArgumentParser(description="Script that uses downloaded blockchain and course data to generate and save data properties")
+	parser.add_argument('action', type=str, choices=['generate', 'remove'], help='Whether to generate processors or to remove some/all previously generated ones.')
+	parser.add_argument('processor_type', type=str, choices=['property', 'postprocessor'], help='Whether to generate properties or postprocessors.')
+	parser.add_argument('--processors', type=str, default=None, help='A list of the names of the processors to generate, separated by a comma.')
+	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
+	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
+	parser.add_argument('--list', dest='list', action="store_true", help="List the available processors that can be generated.")
+	parser.set_defaults(list=False)
+	parser.add_argument('--force', dest='force', action="store_true", help="Shut up and 'sudo do_the_job'.")
+	parser.set_defaults(force=False)
+
+	args, _ = parser.parse_known_args()
+
+	run(args.action, args.processor_type, processors=args.processors.split(',') if args.processors is not None else [], \
+		start=dateutil.parser.parse(args.start) if args.start is not None else None, \
+		end=dateutil.parser.parse(args.end) if args.end is not None else None, list=args.list, force=args.force)
+
