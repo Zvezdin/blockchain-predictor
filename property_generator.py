@@ -43,6 +43,8 @@ def generateProperties(processorObjects, start=None, end=None, force=False):
 			for name in prop.provides:
 				values[name] = []
 
+		print(prop.requires, prop.name)
+
 		reqList += prop.requires
 		if prop.requiresState and not usingState:
 			usingState = True
@@ -149,7 +151,7 @@ def saveProperty(name, val, quiet = False):
 
 def forEachTick(callback, mainKey, dataKeys, start = None, end = None, window=1, flexible=False):
 	#get the time interval where we have all needed data
-	start, end = db.getMasterInterval(['tick', 'block'], start, end) #TODO REMOVE DEBUG
+	start, end = db.getMasterInterval([mainKey, *dataKeys], start, end) #TODO REMOVE DEBUG
 
 	print("Starting generating properties from", start, "to", end)
 
@@ -380,32 +382,31 @@ def generatePostprocessors(postprocessors):
 	for proc in postprocessors:
 		proc_name = proc.name
 
-		for prop in propertyObjects:
-			prop_name = prop.name
+		available_props = [x.name for x in propertyObjects if db.has_key(x.name)] if proc.requires == [] else proc.requires
 
-			if db.has_key(prop_name):
-				print(proc_name, prop_name)
+		for prop_name in available_props:
+			print(proc_name, prop_name)
 
-				proc.requires = [prop_name]
+			proc.requires = [prop_name]
 
-				generateProperties([proc])
+			generateProperties([proc])
 
-				new_name = proc_name % prop_name 
-				#try: # Problem: renaming the key doesn't change the name of the df columns
-				#	db.rename(proc_name, proc_name % prop_name)
-				#except NodeError:
-				print("Renaming %s to %s" % (proc_name, new_name))
+			new_name = proc_name % prop_name 
+			#try: # Problem: renaming the key doesn't change the name of the df columns
+			#	db.rename(proc_name, proc_name % prop_name)
+			#except NodeError:
+			print("Renaming %s to %s" % (proc_name, new_name))
 
-				data = db.get(proc_name)
-				meta = db.getMetadata(proc_name)
+			data = db.get(proc_name)
+			meta = db.getMetadata(proc_name)
 
-				data.rename(index=str, columns={prop_name: new_name})
-				meta['type'] = 'postprocessor'
+			data.rename(index=str, columns={prop_name: new_name})
+			meta['type'] = 'postprocessor'
 
-				db.save(new_name, data)
-				db.setMetadata(new_name, meta)
+			db.save(new_name, data)
+			db.setMetadata(new_name, meta)
 
-				db.remove(proc_name)
+			db.remove(proc_name)
 
 def run(action, processor_type, processors, start=None, end=None, list=False, force=False):
 	db.open()
