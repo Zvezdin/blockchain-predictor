@@ -1,6 +1,6 @@
 import numpy as np
 
-from normalizer import Normalizer
+from .normalizer import Normalizer
 
 class AroundZeroNormalizer(Normalizer):
 	def __init__(self, data):

@@ -1,7 +1,7 @@
 import numpy as np
 from itertools import product
 
-from normalizer import Normalizer
+from .normalizer import Normalizer
 
 class ImageNormalizer(Normalizer):
 	def __init__(self, data, localStd = False):
