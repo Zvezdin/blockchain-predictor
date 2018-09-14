@@ -13,25 +13,16 @@ import pandas as pd
 from arctic.date import CLOSED_OPEN
 import numpy as np
 
-sys.path.insert(0, os.path.realpath('dataset_models'))
-from dataset_model import DatasetModel
+from dataset_models import modelObjects as models
 
-from matrix_model import MatrixModel
-from stacked_model import StackedModel
-import database_tools_old as db
-
-
-
-chunkStore = db.getChunkstore()
-
-models = [MatrixModel(), StackedModel()]
+from database import instance as db
 
 save = True
 debug = False
 
 labelKey = 'closePrice'
 
-def generateDataset(modelName, propertyNames, targetNames, labelsType='full', start=None, end=None, args = {}, preprocess = {}):
+def generateDataset(modelName, propertyNames, targetNames, labelsType='full', start=None, end=None, args = {}):
 	print("Generating dataset for properties %s, targets %s, model %s and range from %s to %s." % (str(propertyNames), str(targetNames), modelName, str(start), str(end)))
 
 	for arr in [propertyNames, targetNames]:
@@ -53,66 +44,18 @@ def generateDataset(modelName, propertyNames, targetNames, labelsType='full', st
 	targets = []
 
 	#make sure we don't go off bounds for any property
-	start, end = db.getMasterInterval(chunkStore, propertyNames+targetNames, start, end)
+	start, end = db.getMasterInterval(propertyNames+targetNames, start, end)
 
 	#load the needed properties
 	for dataType, inputData in [('property', propertyNames), ('target', targetNames)]:
 		for prop in inputData:
-			data = db.loadData(chunkStore, prop, start, end, True, CLOSED_OPEN)
+			data = db.get(prop, start=start, end=end)
 
-			if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
-				print("Running numpy array Arctic workaround for prop %s..." % prop)
-				data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
-
-			if prop in preprocess:
-				settings = preprocess[prop]
-				if 'scale' in settings:
-					if settings['scale'] == 'log2':
-						scaleF = np.log2
-					elif settings['scale'] == 'log10':
-						scaleF = np.log10
-					else:
-						raise ValueError("Unsupported scale type %s for preprocessing of property %s!" % (settings['scale'], prop))
-
-					def scale(val):
-						global globalMin
-
-						if globalMin < 0: #if we have relative values
-							val -= globalMin #turn all negatives to positives
-
-						val = scaleF(val)
-						val[val<0] = 0 #log if 0 is -inf
-
-						return val
-				else:
-					scale = lambda x: x #no scaling
-
-				xAxis = ':'
-				yAxis = ':'
-				
-				if 'slices' in settings:
-					xAxis, yAxis = settings['slices']
-
-				strToSlice = lambda string: slice(*map(lambda x: int(x.strip()) if x.strip() else None, string.split(':')))
-
-				xAxis = strToSlice(xAxis)
-				yAxis = strToSlice(yAxis)
-
-				print("Slicing data by %s and %s." % (str(xAxis), str(yAxis)))
-
-				data[prop] = data[prop].apply(lambda x: x[yAxis, xAxis]) # trim
-
-				global globalMin #we need the minimum single value, to see if the property is realtive or not
-				globalMin = 0
-
-				def findMin(x):
-					global globalMin
-					globalMin = min(globalMin, np.min(x))
-					return x
-
-				data[prop].apply(findMin)
-
-				data[prop] = data[prop].apply(lambda x: scale(x)) # scale
+			print(data.columns)
+			#if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
+			#	assert(False) #this shouldn't happen
+				#print("Running numpy array Arctic workaround for prop %s..." % prop)
+				#data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
 
 			if dataType == 'property':
 				properties.append(data)
@@ -126,8 +69,8 @@ def generateDataset(modelName, propertyNames, targetNames, labelsType='full', st
 	#feed the model the properties and let it generate
 	dataset, dates, nextPrices, targetNorms =  model.generate(properties, targets, args)
 
-	labels, dates = generateLabels(dates, nextPrices, db.loadData(chunkStore, labelKey, start, None, True), labelsType)
-
+	labels = nextPrices
+	
 	if len(dataset) != len(labels): #if we have a length mismatch, probably due to insufficient data for the last label
 		print("Mismatch in lengths of dataset and labels, removing excessive entries")
 		dataset = dataset[:len(labels)] #remove dataframes for which we have no labels
@@ -140,42 +83,6 @@ def generateDataset(modelName, propertyNames, targetNames, labelsType='full', st
 	}
 
 	return package
-
-def generateLabels(dates, nextPrices, ticks, labelsType):
-	"""Generates dataset labels for each passed date, getting data from ticks. dates MUST BE CHRONOLOGICALLY ORDERED. """
-	if labelsType == "boolean":
-		labels = []
-		i=0
-		
-		indices = ticks.index.values
-
-		for date in dates:
-			while ticks.get_value(indices[i], 'date') != date:
-				i+=1
-
-			try:
-				currPrice = ticks.get_value(indices[i], 'closePrice')
-				nextPrice = ticks.get_value(indices[i+1], 'closePrice')
-			except (ValueError, IndexError, KeyError):
-				print("Failed to load the date after", date, ". Probably end of data. Will remove one dataset entry.")
-				dates = dates[:len(labels)] #keep only the labeled dates
-				break
-			if debug:
-				print(ticks.loc[indices[i] : indices[i+1]])
-
-			label = nextPrice > currPrice
-			
-			if debug:
-				print("Label for dataframe at %s is %s for prices curr/next : %s and %s" % (date, label, currPrice, nextPrice) )
-			labels.append([label])
-
-		#make numpy array
-		labels = np.array(labels)
-		
-		return (labels, dates)
-
-	elif labelsType == 'full': #nothing to do, the prices are already given and are normalized
-		return (nextPrices, dates)
 
 def randomizeDataset(dataset):
 	main = dataset['dataset']
@@ -197,7 +104,9 @@ def saveDataset(filename, data):
 		#except Exception as e:
 		#	print('Unable to save data to', filename, ':', e)
 
-def run(model, properties, targets, filename, start=None, end=None, ratio=[1], shuffle=False, args={}, preprocess={}):
+def run(model, properties, targets, filename, start=None, end=None, ratio=[1], shuffle=False, args={}):
+	db.open()
+
 	if type(properties) != list:
 		properties = [properties]
 	if type(targets) != list:
@@ -205,7 +114,7 @@ def run(model, properties, targets, filename, start=None, end=None, ratio=[1], s
 	
 
 	#generate the dataset
-	dataset = generateDataset(model, properties, targets, start=start, end=end, args=args, preprocess=preprocess)
+	dataset = generateDataset(model, properties, targets, start=start, end=end, args=args)
 
 	if shuffle:
 		#randomize it
@@ -246,6 +155,8 @@ def run(model, properties, targets, filename, start=None, end=None, ratio=[1], s
 	if save:
 		saveDataset(filename, data)
 		print("saved dataset and labels as %a." % filename)
+
+	db.close()
 
 def init():
 	parser = argparse.ArgumentParser(description="Generates a dataset by compiling generated data properties using a certain dataset model")
