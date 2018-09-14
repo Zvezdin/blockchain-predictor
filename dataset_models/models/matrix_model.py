@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 
-from imageNormalizer import ImageNormalizer
-from dataset_model import DatasetModel
+from ..normalization.imageNormalizer import ImageNormalizer
+from .dataset_model import DatasetModel
 
 
 class MatrixModel(DatasetModel):

@@ -1,8 +1,8 @@
 import abc
 
-from imageNormalizer import ImageNormalizer
-from basicNormalizer import BasicNormalizer
-from aroundZeroNormalizer import AroundZeroNormalizer
+from ..normalization.imageNormalizer import ImageNormalizer
+from ..normalization.basicNormalizer import BasicNormalizer
+from ..normalization.aroundZeroNormalizer import AroundZeroNormalizer
 
 import numpy as np
 
