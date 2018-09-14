@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 
-from imageNormalizer import ImageNormalizer
-from dataset_model import DatasetModel
+from ..normalization.imageNormalizer import ImageNormalizer
+from .dataset_model import DatasetModel
 
 debug = True
 
@@ -13,7 +13,7 @@ class StackedModel(DatasetModel):
 		self.requires = []
 
 	def getPropertyShape(self, prop):
-		prop = prop.drop('date', axis=1).values[0, 0]
+		prop = prop.values[0, 0]
 
 		return prop.shape
 
@@ -23,7 +23,7 @@ class StackedModel(DatasetModel):
 
 		#argument defaults
 		args.setdefault('window', 24)
-		args.setdefault('normalize', True)
+		args.setdefault('normalize', False)
 		args.setdefault('normalizationLevel', 'pixel') #'property', 'pixel', 'local'
 		args.setdefault('normalizationStd', 'global') #'local', 'global'
 		args.setdefault('localNormalize', [None])
@@ -39,6 +39,7 @@ class StackedModel(DatasetModel):
 		if args['width'] is None: #set the global witdh to the widest property's width
 			widths = [self.getPropertyShape(x)[1] for x in properties]
 			args['width'] = max(widths)
+			print(args['width'])
 
 		propertyValues = np.ndarray((properties[0].shape[0], args['width'], args['height']))
 		targetData = None
@@ -50,7 +51,7 @@ class StackedModel(DatasetModel):
 
 		for dataType, inputData in [('property', properties), ('target', targets)]:
 			for i, prop in enumerate(inputData):
-				prop = prop.drop('date', axis=1)
+				#prop = prop.drop('date', axis=1)
 
 				if len(prop.columns) != 1:
 					raise ValueError("The received property contains more than one data column!", prop.columns)
@@ -128,7 +129,9 @@ class StackedModel(DatasetModel):
 								print(usedSpace)
 							placed = True
 
-		allDates = properties[0]['date']
+		allDates = properties[0].index
+
+		print(allDates, "the dates")
 
 		if debug: print("Shape of property values is %s." % str(propertyValues.shape)) #(samples,H,W)
 
@@ -142,7 +145,7 @@ class StackedModel(DatasetModel):
 
 				targetNorms.append(tarNorm)
 
-		print(targetData, targetData.shape)
+		print(targetData[-10:], targetData.shape)
 
 		window_size = args['window']
 
@@ -171,7 +174,7 @@ class StackedModel(DatasetModel):
 				frame, nextPrices[i] = self.local_normalization(frame, targetData[i], nextPrices[i])
 
 			frames[i] = frame
-			dates.append(allDates.iloc[i+window_size-1])
+			dates.append(allDates[i+window_size-1])
 
 		print("Head frames:")
 		print(frames[:3], frames.shape)
