@@ -104,7 +104,11 @@ def saveDataset(filename, data):
 		#except Exception as e:
 		#	print('Unable to save data to', filename, ':', e)
 
-def run(model, properties, targets, filename, start=None, end=None, ratio=[1], shuffle=False, args={}):
+def run(model, properties, targets, filename, start=None, end=None, ratio=[1], shuffle=False, overwrite=False, args={}):
+	if os.path.isfile(filename) and not overwrite:
+		print("Filename %s already exists and the overwrite flag is not set!" % filename)
+		return
+
 	db.open()
 
 	if type(properties) != list:
@@ -166,11 +170,16 @@ def init():
 	parser.add_argument('--start', type=str, default=None, help='The start date. YYYY-MM-DD-HH')
 	parser.add_argument('--end', type=str, default=None, help='The end date. YYYY-MM-DD-HH')
 	parser.add_argument('--filename', type=str, default=None, help='The target filename / dir to save the pickled dataset to. Defaults to "data/dataset.pickle"')
+	parser.add_argument('--overwrite', dest='overwrite', action='store_true', help="If the filename already exists, overwrite it.")
 	parser.add_argument('--ratio', type=str, default='1', help='On how many fragments to split the main dataset. For example, "1:2:3" will create three datasets with sizes proportional to what given.')
 	parser.add_argument('--shuffle', dest='shuffle', action="store_true", help="Shuffle the generated dataset and labels.")
 	parser.set_defaults(shuffle=False)
+	parser.set_defaults(overwrite=False)
 
 	args, _ = parser.parse_known_args()
+
+	if len(_) != 0:
+		raise ValueError("Provided flags %s cannot be understood." % str(_))
 
 	if args.filename == None:
 		filename = "data/dataset_" + str(args.start) + "-" + str(args.end) + ".pickle"
@@ -188,7 +197,7 @@ def init():
 		print("Error while reading the given ratio. Did you format it in the correct way?")
 		return
 
-	run(args.model, args.properties.split(','), args.targets.split(','), filename, start=start, end=end, ratio=ratio, shuffle=args.shuffle)
+	run(args.model, args.properties.split(','), args.targets.split(','), filename, start=start, end=end, ratio=ratio, shuffle=args.shuffle, overwrite=args.overwrite)
 
 if __name__ == "__main__":
 	init()
