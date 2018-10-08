@@ -23,7 +23,9 @@ readme.pdf
 debug*.txt
 
 !materials/distributions/
-materials/distributions/*.mp4
+materials/distributions/schemes
+materials/distributions/grayscale
+materials/distributions/videos
 
 #IDE and Python files
 .vscode/
