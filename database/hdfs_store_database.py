@@ -17,7 +17,7 @@ class HDFSStoreDatabase(Database):
 		self.store = None
 
 	#TODO: Have this filepath in a config file somewhere
-	def open(self, store='/storage/programming/db_h5/db_small.h5'):
+	def open(self, store='/storage/programming/db_h5/db.h5'):
 		self.store = pd.HDFStore(store)
 
 	def close(self):

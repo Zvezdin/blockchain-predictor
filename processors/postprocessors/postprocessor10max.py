@@ -16,7 +16,7 @@ class Postprocessor10max(Postprocessor):
 			return max(data)
 		else:
 			data = np.array([x for x in data])
-			print(data, type(data), data.shape)
+			#print(data, type(data), data.shape)
 			res = data.max(0)
 			
 			return res
