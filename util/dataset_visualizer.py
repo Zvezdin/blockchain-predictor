@@ -14,12 +14,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-sys.path.insert(0, os.path.realpath('dataset_models')) #needed to load recent datasets
-from imageNormalizer import ImageNormalizer
-from basicNormalizer import BasicNormalizer
-from aroundZeroNormalizer import AroundZeroNormalizer
+import database.instance as db
 
-import database_tools as db
+import dataset_models
+
+#import dataset_models.normalization.imageNormalizer.ImageNormalizer
+#import dataset_models.normalization.basicNormalizer.BasicNormalizer
+#import dataset_models.normalization.aroundZeroNormalizer.AroundZeroNormalizer
 
 
 def plot(values, dates, title=''):
@@ -127,16 +128,15 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					if args.target:
 						plot(dataset['labels'], dataset['dates'], 'Correct labels')
 	elif args.type=='key':
+		db.open()
+
 		prop = args.data
 
-		data = db.loadData(db.getChunkstore(), prop, start, end, True)
-
-		if type(data.iloc[0][prop]) == str: #if the property values have been encoded, decode them
-			print("Running numpy array Arctic workaround for prop %s..." % prop)
-			data[prop] = data[prop].apply(lambda x: db.decodeObject(x))
+		data = db.get(prop, start=start, end=end)
 		
-		values = data[prop].values
-		dates = data['date'].values
+		assert(len(data.columns) == 1)
+		values = data[data.columns[0]].values
+		dates = data.index
 
 		if type(values[0]) != np.ndarray:
 			plot(values, dates, 'Value of '+prop)
@@ -159,7 +159,7 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 				print(val.shape)
 
 				if args.trim:
-					val = val[1:, :-1]
+					val = val[1:, :]
 
 				if args.log2:
 					if np.min(val) < 0: #if we have relative values
@@ -185,3 +185,5 @@ if __name__ == "__main__": #if this is the main file, parse the command args
 					frames.append(val)
 			if args.renderTimelapse is not None:
 				createAnimation(frames, dates)
+		
+		db.close()
