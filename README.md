@@ -2,10 +2,7 @@
 
 A set of tools and scripts that download and process blockchain and cryptocurrency course data, generate a dataset, use it to teach a deep learning neural network to make value predictions and evaluate the result.
 
-The project is a work-in-progress and is yet to give (hopefully) accurate predictions.
-
-## Paper
-The [paper is located here](paper/paper.pdf). Please familiarize yourself with it before proceeding with project setup and usage.
+The project implements the theoretical and experimental setup of a paper, which is currently undergoing peer review.
 
 ## Installation
 
