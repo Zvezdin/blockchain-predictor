@@ -1,31 +1,7 @@
-#system-dependent shortcuts to launch geth/mongo
-geth.sh
-mongo.sh
-script/
-
 #project files
 node_modules/
-log.txt
-data
 c++/build/
-c++/test*
-debug/*
-paper/project/
-paper_acm/*
-temp.py
 
-todo.txt
-results/*
-*model.png
-debug.txt
-materials/*
-readme.pdf
-debug*.txt
-
-!materials/distributions/
-materials/distributions/schemes
-materials/distributions/grayscale
-materials/distributions/videos
 
 #IDE and Python files
 .vscode/
